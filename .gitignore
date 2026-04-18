@@ -1,0 +1,50 @@
+# Secrets
+.env
+.env.*
+.streamlit/secrets.toml
+*.api_key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Word lock files
+~$*
+
+# Generated / sensitive per-project content — do NOT commit manuscripts,
+# headshots, or built output. The repo contains code only.
+*.docx
+*.pdf
+*.doc
+*.jpg
+*.jpeg
+*.png
+*.avif
+*.webp
+*.tif
+*.tiff
+
+# Allow the published TME logo + portrait assets
+!assets/tme-logo.jpg
+!assets/tme-logo-portrait.jpg
+
+# App test outputs (run-local only)
+tme_editor_app/_*.docx
+tme_editor_app/_test_output*

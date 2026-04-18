@@ -1,0 +1,63 @@
+"""Generate the light-gray tagline strip that sits beneath the masthead."""
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt, RGBColor
+
+from tme_template.colors import LIGHT_PANEL_GRAY, TAGLINE_GRAY, UGA_RED
+from tme_template.oxml_helpers import (
+    force_table_full_width,
+    remove_cell_borders,
+    set_cell_margins,
+    set_cell_shading,
+)
+
+
+TAGLINE = "Cultivating scholarly discourse in mathematics education since 1990"
+META_LINE = ("Published by the Mathematics Education Student Association"
+             "  ·  University of Georgia  ·  Peer Reviewed  ·  Open Access")
+
+
+def _red_run(paragraph, text: str, size_pt: float):
+    r = paragraph.add_run(text)
+    r.font.name = "Arial"
+    r.font.size = Pt(size_pt)
+    r.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+    return r
+
+
+def _gray_run(paragraph, text: str, *, name="Georgia", size_pt=11.0, italic=False):
+    r = paragraph.add_run(text)
+    r.font.name = name
+    r.font.size = Pt(size_pt)
+    r.font.italic = italic
+    r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+    return r
+
+
+def add_tagline_strip(doc) -> None:
+    # Bleed to match masthead's right-edge treatment (see masthead.py).
+    TOTAL_WIDTH = 8.5
+    BLEED_INCHES = 0.063
+    table = doc.add_table(rows=1, cols=1)
+    table.autofit = False
+    table.columns[0].width = Inches(TOTAL_WIDTH + BLEED_INCHES)
+    cell = table.cell(0, 0)
+    remove_cell_borders(cell)
+    set_cell_shading(cell, LIGHT_PANEL_GRAY)
+    force_table_full_width(table, total_width_inches=TOTAL_WIDTH + BLEED_INCHES)
+    set_cell_margins(cell, top=80, bottom=80, left=160, right=160)
+
+    # Tagline paragraph: ◆ italic-tagline ◆
+    p1 = cell.paragraphs[0]
+    p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p1.paragraph_format.space_before = Pt(4)
+    p1.paragraph_format.space_after = Pt(2)
+    _red_run(p1, "◆ ", size_pt=9.5)
+    _gray_run(p1, TAGLINE, size_pt=9.5, italic=True)
+    _red_run(p1, " ◆", size_pt=9.5)
+
+    # Meta line
+    p2 = cell.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p2.paragraph_format.space_before = Pt(0)
+    p2.paragraph_format.space_after = Pt(4)
+    _gray_run(p2, META_LINE, name="Arial", size_pt=8.5)

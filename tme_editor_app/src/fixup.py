@@ -1,0 +1,526 @@
+"""Parameterized fixup battery — generalized from moore_build/src/fixup_moore.py.
+
+Applies the set of post-paste corrections that Word's "Keep Source Formatting"
+makes necessary:
+  - style definition updates (body ls, captions Georgia, footnote ls, block
+    quote, list spacing, heading keep-next)
+  - block-quote remapping (indented body paragraphs → TME Block Quote)
+  - caption reclassification (leading-word heuristic)
+  - list direct-spacing clear
+  - table centering + cantSplit + tblHeader
+  - masthead grid rewrite (defensive, in case Word merged adjacent tables)
+  - reference run format strip
+  - footnote font + size normalization (zip-level edit of footnotes.xml)
+"""
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import tempfile
+import zipfile
+from pathlib import Path
+
+from docx import Document
+from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt, RGBColor
+
+
+# ---------- style definition updates ----------
+
+def _find_style(styles, *candidates):
+    names_lc = {s.name.lower(): s.name for s in styles}
+    for c in candidates:
+        actual = names_lc.get(c.lower())
+        if actual is not None:
+            return styles[actual]
+    return None
+
+
+def update_styles(doc) -> None:
+    styles = doc.styles
+    style_names = {s.name for s in styles}
+
+    body = styles["TME Body"]
+    body.paragraph_format.line_spacing = 1.25
+
+    for hname in ("TME H1", "TME H2", "TME H3"):
+        if hname in style_names:
+            h = styles[hname]
+            h.paragraph_format.keep_with_next = True
+            h.paragraph_format.keep_together = True
+
+    fc = styles["TME Figure Caption"]
+    fc.font.name = "Georgia"
+    # NOTE: Figure captions go BELOW figures — we glue the FIGURE paragraph to
+    # the caption in glue_figures_to_captions() below. Don't set keep_with_next
+    # on the caption style itself, or it would stick to the following body para.
+    tc = styles["TME Table Caption"]
+    tc.font.name = "Georgia"
+    tc.paragraph_format.keep_with_next = True  # Table captions are above; glue down.
+
+    fn = styles["TME Footnote"]
+    fn.font.name = "Georgia"
+    fn.paragraph_format.line_spacing = 1.2
+
+    # Word's built-in footnote styles that Keep Source Formatting imports
+    ft = _find_style(styles, "Footnote Text", "footnote text")
+    if ft is not None:
+        ft.font.name = "Georgia"
+        ft.font.size = Pt(9)
+        if ft.paragraph_format is not None:
+            ft.paragraph_format.line_spacing = 1.2
+    for sname in ("Footnote Reference", "footnote reference", "Footnote Text Char"):
+        s = _find_style(styles, sname)
+        if s is not None:
+            s.font.name = "Georgia"
+
+    if "TME Block Quote" in style_names:
+        bq = styles["TME Block Quote"]
+    else:
+        bq = styles.add_style("TME Block Quote", WD_STYLE_TYPE.PARAGRAPH)
+    bq.font.name = "Georgia"
+    bq.font.size = Pt(10.5)
+    bq.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    bq.paragraph_format.left_indent = Pt(28)
+    bq.paragraph_format.right_indent = Pt(28)
+    bq.paragraph_format.line_spacing = 1.0
+    bq.paragraph_format.space_before = Pt(8)
+    bq.paragraph_format.space_after = Pt(8)
+
+    if "List Paragraph" in style_names:
+        lp = styles["List Paragraph"]
+        lp.font.name = "Georgia"
+        lp.font.size = Pt(11.5)
+        lp.paragraph_format.line_spacing = 1.25
+        lp.paragraph_format.space_before = Pt(0)
+        lp.paragraph_format.space_after = Pt(4)
+
+
+# ---------- content remapping ----------
+
+_REF_OPENER = re.compile(r"^[A-ZÀ-ÖØ-Ý][\w'’\-]+,\s+[A-Z]\.")
+
+
+def remap_block_quotes(doc) -> int:
+    bq_style = doc.styles["TME Block Quote"]
+    n = 0
+    for p in doc.paragraphs:
+        if p.style.name != "TME Body":
+            continue
+        # Guard: a "LastName, F." opener means this is a reference that was
+        # mis-classified as body; don't turn it into a block quote.
+        if _REF_OPENER.match(p.text.strip()):
+            continue
+        # Guard: hanging indent (negative first_line_indent) strongly suggests
+        # a reference, not a block quote
+        fli = p.paragraph_format.first_line_indent
+        if fli is not None and fli.pt < 0:
+            continue
+        li = p.paragraph_format.left_indent
+        if li is None:
+            continue
+        if li.pt > 20:
+            p.style = bq_style
+            p.paragraph_format.left_indent = None
+            p.paragraph_format.first_line_indent = None
+            n += 1
+    return n
+
+
+def rescue_misclassified_references(doc) -> int:
+    """Move any TME Block Quote whose text looks like a reference opener back
+    to TME Reference. Defensive against upstream misclassification."""
+    ref_style = doc.styles["TME Reference"]
+    n = 0
+    for p in doc.paragraphs:
+        if p.style.name != "TME Block Quote":
+            continue
+        if _REF_OPENER.match(p.text.strip()):
+            p.style = ref_style
+            p.paragraph_format.left_indent = None
+            p.paragraph_format.first_line_indent = None
+            n += 1
+    return n
+
+
+def fix_caption_classifications(doc) -> dict:
+    fc = doc.styles["TME Figure Caption"]
+    tc = doc.styles["TME Table Caption"]
+    stats = {"fig_from_body": 0, "tab_from_body": 0, "fig_fix": 0, "tab_fix": 0}
+    for p in doc.paragraphs:
+        t = p.text.strip()
+        if not t or len(t) > 400:
+            continue
+        starts_fig = t.startswith("Figure")
+        starts_tab = t.startswith("Table")
+        if not (starts_fig or starts_tab):
+            continue
+        sn = p.style.name
+        if starts_fig and sn == "TME Body":
+            p.style = fc
+            stats["fig_from_body"] += 1
+        elif starts_tab and sn == "TME Body":
+            p.style = tc
+            stats["tab_from_body"] += 1
+        elif starts_fig and sn == "TME Table Caption":
+            p.style = fc
+            stats["fig_fix"] += 1
+        elif starts_tab and sn == "TME Figure Caption":
+            p.style = tc
+            stats["tab_fix"] += 1
+    return stats
+
+
+def glue_figures_to_captions(doc) -> int:
+    """APA: figure captions go BELOW the figure. To keep figure + caption
+    together across pages, set keep_with_next on the paragraph immediately
+    preceding each TME Figure Caption (that paragraph is the figure itself).
+    """
+    n = 0
+    paras = list(doc.paragraphs)
+    for i, p in enumerate(paras):
+        if p.style.name != "TME Figure Caption":
+            continue
+        if i == 0:
+            continue
+        prev = paras[i - 1]
+        # Only glue if the previous paragraph looks like a figure (has an image
+        # run) or is non-empty. Empty paragraphs between figures and captions
+        # are common; skip past them up to 2 hops.
+        j = i - 1
+        while j >= 0 and not paras[j].text.strip() and not _paragraph_has_image(paras[j]):
+            j -= 1
+            if i - j > 3:
+                break
+        if j >= 0:
+            paras[j].paragraph_format.keep_with_next = True
+            n += 1
+    return n
+
+
+def _paragraph_has_image(p) -> bool:
+    return p._p.find(".//" + qn("w:drawing")) is not None or \
+           p._p.find(".//" + qn("w:pict")) is not None
+
+
+def clear_list_direct_spacing(doc) -> int:
+    n = 0
+    for p in doc.paragraphs:
+        if p.style.name != "List Paragraph":
+            continue
+        pf = p.paragraph_format
+        changed = False
+        if pf.line_spacing is not None:
+            pf.line_spacing = None
+            changed = True
+        if pf.space_before is not None and pf.space_before.pt > 0:
+            pf.space_before = None
+            changed = True
+        if changed:
+            n += 1
+    return n
+
+
+def strip_reference_run_formatting(doc) -> int:
+    n = 0
+    for p in doc.paragraphs:
+        if p.style.name != "TME Reference":
+            continue
+        for r in p.runs:
+            rPr = r._r.find(qn("w:rPr"))
+            if rPr is None:
+                continue
+            for tag in ("w:sz", "w:szCs", "w:b", "w:bCs", "w:rFonts"):
+                for el in rPr.findall(qn(tag)):
+                    rPr.remove(el)
+                    n += 1
+    return n
+
+
+# Paragraph-property tags to strip from TME-styled paragraphs. These are the
+# direct overrides that leak through "Keep Source Formatting" paste and fight
+# our paragraph styles.
+_PPR_STRIP_TAGS = ("w:spacing", "w:ind")
+
+# Run-property tags to strip on structural styles (headings, captions, body,
+# references). Leave w:i (italic), w:iCs, w:u (underline), w:color alone —
+# those are legitimate inline emphasis.
+_RPR_STRIP_TAGS_STRUCT = ("w:rFonts", "w:sz", "w:szCs", "w:b", "w:bCs")
+
+
+def strip_direct_formatting(doc) -> dict:
+    """Strip direct paragraph-level spacing/indent and run-level font/size/bold
+    on paragraphs in TME styles where the style should win. Applied to:
+      - TME Body, TME H1/H2/H3, TME Figure Caption, TME Table Caption,
+        TME Reference, TME Footnote, TME Block Quote, List Paragraph.
+    """
+    targets = {
+        "TME Body", "TME H1", "TME H2", "TME H3",
+        "TME Figure Caption", "TME Table Caption",
+        "TME Reference", "TME Footnote", "TME Block Quote",
+        "List Paragraph",
+    }
+    stats = {"paras_stripped": 0, "runs_stripped": 0}
+    for p in doc.paragraphs:
+        if p.style.name not in targets:
+            continue
+        # Paragraph-level strip
+        pPr = p._p.find(qn("w:pPr"))
+        para_changed = False
+        if pPr is not None:
+            for tag in _PPR_STRIP_TAGS:
+                for el in pPr.findall(qn(tag)):
+                    pPr.remove(el)
+                    para_changed = True
+        # Run-level strip
+        run_changed = False
+        for r in p.runs:
+            rPr = r._r.find(qn("w:rPr"))
+            if rPr is None:
+                continue
+            for tag in _RPR_STRIP_TAGS_STRUCT:
+                for el in rPr.findall(qn(tag)):
+                    rPr.remove(el)
+                    run_changed = True
+        if para_changed:
+            stats["paras_stripped"] += 1
+        if run_changed:
+            stats["runs_stripped"] += 1
+    return stats
+
+
+def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
+    """For content tables (skipping masthead + author card), strip run-level
+    font name and size overrides inside cells so content renders at the body
+    font (Georgia). Preserves bold/italic which are used for emphasis."""
+    n = 0
+    for i, table in enumerate(doc.tables):
+        if i in skip_indices:
+            continue
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for r in p.runs:
+                        rPr = r._r.find(qn("w:rPr"))
+                        if rPr is None:
+                            continue
+                        for tag in ("w:rFonts", "w:sz", "w:szCs"):
+                            for el in rPr.findall(qn(tag)):
+                                rPr.remove(el)
+                                n += 1
+    return n
+
+
+# ---------- table fixes ----------
+
+def _set_trPr_flag(tr, tag_name: str) -> None:
+    trPr = tr.find(qn("w:trPr"))
+    if trPr is None:
+        trPr = OxmlElement("w:trPr")
+        tr.insert(0, trPr)
+    existing = trPr.find(qn(f"w:{tag_name}"))
+    if existing is None:
+        el = OxmlElement(f"w:{tag_name}")
+        trPr.append(el)
+
+
+def fix_content_tables(doc, skip_indices=(0, 1)) -> int:
+    """Center content tables, prevent row splits, repeat header row.
+
+    skip_indices are masthead (0) and the author-card table (1) in our
+    standard starter layout. If the docx structure differs, the caller can
+    override.
+    """
+    n = 0
+    for i, table in enumerate(doc.tables):
+        if i in skip_indices:
+            continue
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        tblPr = table._tbl.find(qn("w:tblPr"))
+        if tblPr is not None:
+            tblInd = tblPr.find(qn("w:tblInd"))
+            if tblInd is not None:
+                tblInd.set(qn("w:w"), "0")
+            jc = tblPr.find(qn("w:jc"))
+            if jc is None:
+                jc = OxmlElement("w:jc")
+                tblPr.append(jc)
+            jc.set(qn("w:val"), "center")
+
+        rows = table._tbl.findall(qn("w:tr"))
+        for tr in rows:
+            _set_trPr_flag(tr, "cantSplit")
+        if rows:
+            _set_trPr_flag(rows[0], "tblHeader")
+        n += 1
+    return n
+
+
+def fix_masthead_grid(doc) -> bool:
+    """Defensive: rewrite the masthead table grid in case Word merged it with
+    the tagline table (see fixup_moore.py for the original diagnosis)."""
+    if not doc.tables:
+        return False
+    table = doc.tables[0]
+    tbl = table._tbl
+
+    BLEED = 90  # twips
+    COL0, COL1 = 4651, 7589 + BLEED
+    TOTAL = COL0 + COL1
+
+    existing_grid = tbl.find(qn("w:tblGrid"))
+    if existing_grid is not None:
+        tbl.remove(existing_grid)
+    tblGrid = OxmlElement("w:tblGrid")
+    for w in (COL0, COL1):
+        col = OxmlElement("w:gridCol")
+        col.set(qn("w:w"), str(w))
+        tblGrid.append(col)
+    tblPr = tbl.find(qn("w:tblPr"))
+    if tblPr is not None:
+        tblPr.addnext(tblGrid)
+    else:
+        tbl.insert(0, tblGrid)
+
+    rows = tbl.findall(qn("w:tr"))
+    for tr in rows:
+        trPr = tr.find(qn("w:trPr"))
+        if trPr is not None:
+            for tag in ("w:gridBefore", "w:gridAfter", "w:wBefore", "w:wAfter"):
+                for el in trPr.findall(qn(tag)):
+                    trPr.remove(el)
+
+    if len(rows) >= 1:
+        cells = rows[0].findall(qn("w:tc"))
+        widths = [COL0, COL1]
+        for cell, w in zip(cells, widths):
+            tcPr = cell.find(qn("w:tcPr"))
+            if tcPr is None:
+                continue
+            tcW = tcPr.find(qn("w:tcW"))
+            if tcW is None:
+                tcW = OxmlElement("w:tcW")
+                tcPr.insert(0, tcW)
+            tcW.set(qn("w:w"), str(w))
+            tcW.set(qn("w:type"), "dxa")
+            gs = tcPr.find(qn("w:gridSpan"))
+            if gs is not None:
+                tcPr.remove(gs)
+    if len(rows) >= 2:
+        cells = rows[1].findall(qn("w:tc"))
+        if cells:
+            cell = cells[0]
+            tcPr = cell.find(qn("w:tcPr"))
+            if tcPr is not None:
+                tcW = tcPr.find(qn("w:tcW"))
+                if tcW is None:
+                    tcW = OxmlElement("w:tcW")
+                    tcPr.insert(0, tcW)
+                tcW.set(qn("w:w"), str(TOTAL))
+                tcW.set(qn("w:type"), "dxa")
+                gs = tcPr.find(qn("w:gridSpan"))
+                if gs is None:
+                    gs = OxmlElement("w:gridSpan")
+                    tcPr.append(gs)
+                gs.set(qn("w:val"), "2")
+
+    if tblPr is not None:
+        tblW = tblPr.find(qn("w:tblW"))
+        if tblW is None:
+            tblW = OxmlElement("w:tblW")
+            tblPr.insert(0, tblW)
+        tblW.set(qn("w:w"), str(TOTAL))
+        tblW.set(qn("w:type"), "dxa")
+    return True
+
+
+# ---------- footnote font + size fix (zip-level) ----------
+
+def fix_footnote_fonts(docx_path: Path) -> dict:
+    src = str(docx_path)
+    with zipfile.ZipFile(src, "r") as z:
+        if "word/footnotes.xml" not in z.namelist():
+            return {"rfonts_rewritten": 0, "rfonts_injected": 0, "sz_stripped": 0}
+        with z.open("word/footnotes.xml") as f:
+            xml = f.read().decode("utf-8")
+
+    rewritten = 0
+    def _rewrite_rfonts(m):
+        nonlocal rewritten
+        rewritten += 1
+        return '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/>'
+    xml = re.sub(r"<w:rFonts\b[^/]*/>", _rewrite_rfonts, xml)
+
+    stripped = 0
+    def _count_sub(pattern, s):
+        nonlocal stripped
+        s2, n = re.subn(pattern, "", s)
+        stripped += n
+        return s2
+    xml = _count_sub(r"<w:sz\b[^/]*/>", xml)
+    xml = _count_sub(r"<w:szCs\b[^/]*/>", xml)
+
+    injected = 0
+    def _inject_rfonts(m):
+        nonlocal injected
+        inner = m.group(1)
+        if "<w:rFonts" in inner:
+            return m.group(0)
+        injected += 1
+        return f'<w:rPr>{inner}<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/></w:rPr>'
+    xml = re.sub(r"<w:rPr>(.*?)</w:rPr>", _inject_rfonts, xml, flags=re.DOTALL)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".docx")
+    os.close(tmp_fd)
+    with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == "word/footnotes.xml":
+                data = xml.encode("utf-8")
+            zout.writestr(item, data)
+    shutil.move(tmp_path, src)
+    return {"rfonts_rewritten": rewritten, "rfonts_injected": injected, "sz_stripped": stripped}
+
+
+# ---------- main entry ----------
+
+def run_fixup(docx_path: str) -> dict:
+    """Apply the full fixup battery to the docx at docx_path, in place. Returns
+    a stats dict for UI display."""
+    doc = Document(docx_path)
+
+    update_styles(doc)
+    bq_count = remap_block_quotes(doc)
+    rescued_refs = rescue_misclassified_references(doc)
+    caption_stats = fix_caption_classifications(doc)
+    list_n = clear_list_direct_spacing(doc)
+    fig_glued = glue_figures_to_captions(doc)
+    t_count = fix_content_tables(doc)
+    masthead_ok = fix_masthead_grid(doc)
+    ref_stripped = strip_reference_run_formatting(doc)
+    # Run AFTER reclassification so stripping applies to final-style paragraphs
+    direct_strip = strip_direct_formatting(doc)
+    cell_strip = normalize_table_cells(doc)
+
+    doc.save(docx_path)
+
+    # Zip-level footnote fix must be after python-docx save.
+    fn_stats = fix_footnote_fonts(Path(docx_path))
+
+    return {
+        "block_quotes_remapped": bq_count,
+        "refs_rescued": rescued_refs,
+        "captions": caption_stats,
+        "lists_cleared": list_n,
+        "figures_glued": fig_glued,
+        "tables_centered": t_count,
+        "masthead_ok": masthead_ok,
+        "references_stripped": ref_stripped,
+        "direct_formatting": direct_strip,
+        "table_cells_normalized": cell_strip,
+        "footnotes": fn_stats,
+    }

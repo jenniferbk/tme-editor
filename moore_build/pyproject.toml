@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moore-pipeline"
+version = "1.0.0"
+description = "Automated preprocessing pipeline for the Moore article (TME Vol 34 No 1)"
+requires-python = ">=3.11"
+dependencies = [
+  "python-docx>=0.8.11",
+  "lxml>=4.9",
+  "Pillow>=10.0",
+  # Reuse the template generator package for styles and cover-page building:
+  "tme-template @ file:///Users/jenniferkleiman/Documents/TME/template_build",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
