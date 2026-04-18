@@ -17,7 +17,7 @@ A web tool for building formatted *The Mathematics Educator* articles from a sub
 ## Running locally (for development or testing)
 
 ```bash
-cd /Users/jenniferkleiman/Documents/TME/tme_editor_app
+cd tme_editor_app
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

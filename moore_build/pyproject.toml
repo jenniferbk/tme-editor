@@ -11,8 +11,9 @@ dependencies = [
   "python-docx>=0.8.11",
   "lxml>=4.9",
   "Pillow>=10.0",
-  # Reuse the template generator package for styles and cover-page building:
-  "tme-template @ file:///Users/jenniferkleiman/Documents/TME/template_build",
+  # Note: tme-template (a sibling package) is NOT listed here because it's
+  # not on PyPI. The root requirements.txt installs ./template_build before
+  # ./moore_build, so the import works at runtime.
 ]
 
 [project.optional-dependencies]
