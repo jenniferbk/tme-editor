@@ -57,50 +57,22 @@ def _add_page_field(run):
     run._r.append(fld_char_end)
 
 
-def _build_footer(container, copyright_line: str, *, page_on_right: bool):
-    """Tab-separated footer: license on one side, page number on the other.
-
-    Verso (even pages): page number flush left, copyright flush right.
-    Recto (odd pages): copyright flush left, page number flush right.
-    A 1pt top rule visually separates the footer from body text.
-    """
+def _build_footer(container):
+    """Centered page number with a 1pt top rule. Same layout on verso and recto."""
     _clear(container)
     p = container.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    # Top rule separator
-    apply_top_rule(p, hex_color="EEEEEE", width_pt=1)
-    # Tab stops at right edge of text (6.5")
-    p.paragraph_format.tab_stops.add_tab_stop(Pt(468), WD_ALIGN_PARAGRAPH.RIGHT)
-    if page_on_right:
-        # Recto (odd): copyright left, page number right
-        r1 = p.add_run(copyright_line)
-        r1.font.name = "Georgia"
-        r1.font.size = Pt(9.5)
-        r1.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
-        p.add_run("\t")
-        r2 = p.add_run()
-        r2.font.name = "Georgia"
-        r2.font.size = Pt(9.5)
-        r2.font.bold = True
-        r2.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
-        _add_page_field(r2)
-    else:
-        # Verso (even): page number left, copyright right
-        r2 = p.add_run()
-        r2.font.name = "Georgia"
-        r2.font.size = Pt(9.5)
-        r2.font.bold = True
-        r2.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
-        _add_page_field(r2)
-        p.add_run("\t")
-        r1 = p.add_run(copyright_line)
-        r1.font.name = "Georgia"
-        r1.font.size = Pt(9.5)
-        r1.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    apply_top_rule(p, hex_color="EEEEEE", width_pt=1)  # palette migration in Task 12
+    run = p.add_run()
+    run.font.name = "Georgia"
+    run.font.size = Pt(9.5)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(0x22, 0x22, 0x22)  # palette migration in Task 12
+    _add_page_field(run)
 
 
-def set_running_footer(doc, copyright_line: str, section=None) -> None:
-    """Static footer: license line + page number. Same content on verso and recto.
+def set_running_footer(doc, section=None) -> None:
+    """Body-page footer: centered page number only. No copyright, no license line.
 
     If *section* is provided, operate only on that section object.
     When None (default), operate on all sections (backward-compatible).
@@ -110,5 +82,5 @@ def set_running_footer(doc, copyright_line: str, section=None) -> None:
         section.even_page_footer.is_linked_to_previous = False
     sections = [section] if section is not None else doc.sections
     for sec in sections:
-        _build_footer(sec.footer, copyright_line, page_on_right=True)
-        _build_footer(sec.even_page_footer, copyright_line, page_on_right=False)
+        _build_footer(sec.footer)
+        _build_footer(sec.even_page_footer)
