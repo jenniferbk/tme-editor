@@ -7,7 +7,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
-from tme_template.colors import UGA_RED
+from tme_template.colors import LINE, META, UGA_RED
 from tme_template.oxml_helpers import apply_bottom_rule, remove_cell_borders, set_cell_margins
 
 
@@ -85,11 +85,11 @@ def add_research_article_cover(doc, data: CoverData) -> None:
         r_num.font.name = "Georgia"
         r_num.font.size = Pt(9)
         r_num.font.superscript = True
-        r_num.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+        r_num.font.color.rgb = RGBColor.from_string(META)
         r_txt = p.add_run(aff)
         r_txt.font.name = "Georgia"
         r_txt.font.size = Pt(9)
-        r_txt.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+        r_txt.font.color.rgb = RGBColor.from_string(META)
 
     # Corresponding author line
     corres = next((a for a in data.authors if a.corresponding), None)
@@ -104,7 +104,7 @@ def add_research_article_cover(doc, data: CoverData) -> None:
         r.font.name = "Georgia"
         r.font.size = Pt(9)
         r.font.italic = True
-        r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+        r.font.color.rgb = RGBColor.from_string(META)
 
     # Dates row
     p = doc.add_paragraph()
@@ -115,22 +115,22 @@ def add_research_article_cover(doc, data: CoverData) -> None:
             sep = p.add_run("  ·  ")
             sep.font.name = "Arial"
             sep.font.size = Pt(9)
-            sep.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            sep.font.color.rgb = RGBColor.from_string(LINE)
         r_l = p.add_run(label.upper())
         r_l.font.name = "Arial"
         r_l.font.size = Pt(9)
         r_l.font.bold = True
-        r_l.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+        r_l.font.color.rgb = RGBColor.from_string(META)
         r_d = p.add_run(f" {date}")
         r_d.font.name = "Arial"
         r_d.font.size = Pt(9)
-        r_d.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        r_d.font.color.rgb = RGBColor.from_string(META)
 
     # Rule
     rule_p = doc.add_paragraph()
     rule_p.paragraph_format.space_before = Pt(0)
     rule_p.paragraph_format.space_after = Pt(8)
-    apply_bottom_rule(rule_p, hex_color="CCCCCC", width_pt=1)
+    apply_bottom_rule(rule_p, hex_color=LINE, width_pt=1)
 
     # About the Authors label
     ab_lbl = doc.add_paragraph()
@@ -199,7 +199,7 @@ def add_research_article_cover(doc, data: CoverData) -> None:
     rule_p2 = doc.add_paragraph()
     rule_p2.paragraph_format.space_before = Pt(0)
     rule_p2.paragraph_format.space_after = Pt(8)
-    apply_bottom_rule(rule_p2, hex_color="CCCCCC", width_pt=1)
+    apply_bottom_rule(rule_p2, hex_color=LINE, width_pt=1)
 
     # Abstract label and text
     lbl = doc.add_paragraph()
