@@ -228,6 +228,16 @@ if st.session_state.meta is not None:
         )
 
         if populated is not None:
+            swap_below_captions = st.checkbox(
+                "Also try to move any figure/table captions that appear below "
+                "their figure/table so they sit above (APA 7).",
+                value=False,
+                help=(
+                    "When off (default), below-element captions are reported as warnings "
+                    "but not modified. When on, the app will attempt to relocate each "
+                    "caption paragraph above its figure/table after the main fixup pass."
+                ),
+            )
             if st.button("Finalize proof", type='primary'):
                 with st.spinner("Applying TME styles and running fixup battery…"):
                     try:
@@ -238,10 +248,40 @@ if st.session_state.meta is not None:
                         style_stats = apply_styles(str(proof_path), meta)
                         fixup_stats = run_fixup(str(proof_path))
 
+                        # Opt-in swap of below-element captions
+                        below = fixup_stats.get("captions_below_element", [])
+                        swapped = 0
+                        if swap_below_captions and below:
+                            from docx import Document as _Doc
+                            from fixup import swap_captions_above
+                            d = _Doc(str(proof_path))
+                            swapped = swap_captions_above(d, below)
+                            d.save(str(proof_path))
+
                         st.session_state.proof_bytes = proof_path.read_bytes()
                         st.session_state.proof_filename = _proof_filename(meta)
 
                         st.success("Proof finalized.")
+
+                        # APA-7 caption position warning
+                        if below:
+                            if swap_below_captions:
+                                st.info(
+                                    f"Moved {swapped} of {len(below)} below-element "
+                                    "caption(s) above their figure/table."
+                                )
+                            else:
+                                items = "\n".join(
+                                    f"- {r['kind'].title()} caption: {r['preview']}"
+                                    for r in below
+                                )
+                                st.warning(
+                                    f"{len(below)} caption(s) sit below their figure/"
+                                    "table — APA 7 puts captions above. Consider "
+                                    "toggling the swap checkbox and finalizing again, "
+                                    "or moving them by hand in Word.\n\n" + items
+                                )
+
                         with st.expander("Style + fixup stats"):
                             st.markdown("**apply_styles:**")
                             st.json(style_stats)
