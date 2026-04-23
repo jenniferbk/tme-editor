@@ -55,16 +55,15 @@ Generated artifact regenerated at the end:
 ## Task 1: Bootstrap test infrastructure
 
 **Files:**
-- Create: `template_build/tests/__init__.py`
 - Create: `template_build/tests/conftest.py`
-- Create: `tme_editor_app/tests/__init__.py`
+- Create: `tme_editor_app/tests/conftest.py`
 
-- [ ] **Step 1: Create empty `__init__.py` files**
+Note: no `__init__.py` in either tests/ directory. With `__init__.py`, pytest's
+default importer treats both `conftest.py` files as `tests.conftest` at the top
+level and refuses to load the second one. Keeping tests/ as a non-package
+directory makes both conftest files loadable together.
 
-```bash
-touch template_build/tests/__init__.py
-touch tme_editor_app/tests/__init__.py
-```
+- [ ] **Step 1: (no-op; __init__.py files are intentionally not created)**
 
 - [ ] **Step 2: Write `template_build/tests/conftest.py`**
 
@@ -95,19 +94,20 @@ for p in (HERE / "src", REPO / "template_build" / "src", REPO / "moore_build" / 
 
 - [ ] **Step 4: Verify pytest can discover the new dirs**
 
-Run: `cd /Users/jenniferkleiman/Documents/tme-editor && python -m pytest template_build/tests tme_editor_app/tests --collect-only -q`
+Run: `cd /Users/jenniferkleiman/Documents/tme-editor && python3 -m pytest template_build/tests tme_editor_app/tests --collect-only -q`
 Expected: "no tests collected" (no test files yet) with no import errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add template_build/tests/__init__.py template_build/tests/conftest.py tme_editor_app/tests/__init__.py tme_editor_app/tests/conftest.py
+git add template_build/tests/conftest.py tme_editor_app/tests/conftest.py
 git commit -m "$(cat <<'EOF'
 Bootstrap pytest dirs for template_build and editor app
 
-Creates empty tests/ trees with conftest.py path bootstrapping so the
-next tasks can add unit tests without every test file duplicating the
-sys.path setup.
+Adds a conftest.py in each package's tests/ directory that prepends the
+relevant src/ paths to sys.path. No tests/__init__.py — pytest's default
+importer rejects duplicate top-level module names across two such dirs,
+and we don't need package semantics for the test tree.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
