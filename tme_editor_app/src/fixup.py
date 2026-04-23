@@ -55,12 +55,11 @@ def update_styles(doc) -> None:
 
     fc = styles["TME Figure Caption"]
     fc.font.name = "Georgia"
-    # NOTE: Figure captions go BELOW figures — we glue the FIGURE paragraph to
-    # the caption in glue_figures_to_captions() below. Don't set keep_with_next
-    # on the caption style itself, or it would stick to the following body para.
+    fc.paragraph_format.keep_with_next = True  # caption above → glue down to figure/table
+
     tc = styles["TME Table Caption"]
     tc.font.name = "Georgia"
-    tc.paragraph_format.keep_with_next = True  # Table captions are above; glue down.
+    tc.paragraph_format.keep_with_next = True
 
     fn = styles["TME Footnote"]
     fn.font.name = "Georgia"
@@ -173,38 +172,6 @@ def fix_caption_classifications(doc) -> dict:
             p.style = tc
             stats["tab_fix"] += 1
     return stats
-
-
-def glue_figures_to_captions(doc) -> int:
-    """APA: figure captions go BELOW the figure. To keep figure + caption
-    together across pages, set keep_with_next on the paragraph immediately
-    preceding each TME Figure Caption (that paragraph is the figure itself).
-    """
-    n = 0
-    paras = list(doc.paragraphs)
-    for i, p in enumerate(paras):
-        if p.style.name != "TME Figure Caption":
-            continue
-        if i == 0:
-            continue
-        prev = paras[i - 1]
-        # Only glue if the previous paragraph looks like a figure (has an image
-        # run) or is non-empty. Empty paragraphs between figures and captions
-        # are common; skip past them up to 2 hops.
-        j = i - 1
-        while j >= 0 and not paras[j].text.strip() and not _paragraph_has_image(paras[j]):
-            j -= 1
-            if i - j > 3:
-                break
-        if j >= 0:
-            paras[j].paragraph_format.keep_with_next = True
-            n += 1
-    return n
-
-
-def _paragraph_has_image(p) -> bool:
-    return p._p.find(".//" + qn("w:drawing")) is not None or \
-           p._p.find(".//" + qn("w:pict")) is not None
 
 
 def clear_list_direct_spacing(doc) -> int:
@@ -498,7 +465,6 @@ def run_fixup(docx_path: str) -> dict:
     rescued_refs = rescue_misclassified_references(doc)
     caption_stats = fix_caption_classifications(doc)
     list_n = clear_list_direct_spacing(doc)
-    fig_glued = glue_figures_to_captions(doc)
     t_count = fix_content_tables(doc)
     masthead_ok = fix_masthead_grid(doc)
     ref_stripped = strip_reference_run_formatting(doc)
@@ -516,7 +482,6 @@ def run_fixup(docx_path: str) -> dict:
         "refs_rescued": rescued_refs,
         "captions": caption_stats,
         "lists_cleared": list_n,
-        "figures_glued": fig_glued,
         "tables_centered": t_count,
         "masthead_ok": masthead_ok,
         "references_stripped": ref_stripped,
