@@ -260,6 +260,73 @@ def strip_direct_formatting(doc) -> dict:
     return stats
 
 
+def report_below_element_captions(doc) -> list:
+    """Return caption paragraphs that sit below their figure/table instead of above.
+
+    APA 7 places the caption above the element; fixup flags any violation so
+    the editor can fix it (manually, or via swap_captions_above).
+
+    Returned entries look like:
+        {"index": 12, "kind": "figure", "preview": "Figure 2. Student work…"}
+    """
+    reports = []
+    body = doc.element.body
+    children = list(body.iterchildren())
+    tag_p, tag_tbl = qn("w:p"), qn("w:tbl")
+
+    para_idx = -1  # running index into doc.paragraphs (paragraph children only)
+    for i, el in enumerate(children):
+        if el.tag != tag_p:
+            continue
+        para_idx += 1
+        p = doc.paragraphs[para_idx]
+        sn = p.style.name if p.style is not None else ""
+        if sn not in ("TME Figure Caption", "TME Table Caption"):
+            continue
+        # Look at the previous non-empty sibling in body order.
+        prev_el = None
+        for back in range(i - 1, -1, -1):
+            cand = children[back]
+            if cand.tag == tag_p:
+                # Skip empty paragraph spacers — but a paragraph carrying a
+                # drawing/pict is NOT empty for our purposes, even if it has
+                # no w:t text.
+                has_drawing = cand.find(".//" + qn("w:drawing")) is not None
+                has_pict = cand.find(".//" + qn("w:pict")) is not None
+                if (
+                    not has_drawing
+                    and not has_pict
+                    and (cand.text or "").strip() == ""
+                    and cand.find(".//" + qn("w:t")) is None
+                ):
+                    continue
+                prev_el = cand
+                break
+            if cand.tag == tag_tbl:
+                prev_el = cand
+                break
+        if prev_el is None:
+            continue
+        is_fig_caption = sn == "TME Figure Caption"
+        is_tab_caption = sn == "TME Table Caption"
+        prev_is_image_para = prev_el.tag == tag_p and (
+            prev_el.find(".//" + qn("w:drawing")) is not None or
+            prev_el.find(".//" + qn("w:pict")) is not None
+        )
+        prev_is_table = prev_el.tag == tag_tbl
+        if is_fig_caption and prev_is_image_para:
+            reports.append({
+                "index": para_idx, "kind": "figure",
+                "preview": (p.text[:80] or "").strip(),
+            })
+        elif is_tab_caption and prev_is_table:
+            reports.append({
+                "index": para_idx, "kind": "table",
+                "preview": (p.text[:80] or "").strip(),
+            })
+    return reports
+
+
 def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
     """For content tables (skipping masthead + author card), strip run-level
     font name and size overrides inside cells so content renders at the body
@@ -472,6 +539,8 @@ def run_fixup(docx_path: str) -> dict:
     direct_strip = strip_direct_formatting(doc)
     cell_strip = normalize_table_cells(doc)
 
+    below = report_below_element_captions(doc)
+
     doc.save(docx_path)
 
     # Zip-level footnote fix must be after python-docx save.
@@ -481,6 +550,7 @@ def run_fixup(docx_path: str) -> dict:
         "block_quotes_remapped": bq_count,
         "refs_rescued": rescued_refs,
         "captions": caption_stats,
+        "captions_below_element": below,
         "lists_cleared": list_n,
         "tables_centered": t_count,
         "masthead_ok": masthead_ok,
