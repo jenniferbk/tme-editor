@@ -3,6 +3,8 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, Emu, RGBColor
 
+from tme_template.colors import BLOCKQUOTE_INK, INK, TEXT_MUTED
+
 
 def _get_or_add_paragraph_style(doc, name: str):
     """Return existing style by name, or add a new paragraph style."""
@@ -29,7 +31,7 @@ def register_title_style(doc) -> None:
     style.font.name = "Georgia"
     style.font.size = Pt(18)
     style.font.bold = True
-    style.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+    style.font.color.rgb = RGBColor.from_string(INK)
     pf = style.paragraph_format
     pf.line_spacing = 1.15
     pf.space_before = Pt(12)
@@ -43,7 +45,7 @@ def register_heading_styles(doc) -> None:
     h1.font.name = "Georgia"
     h1.font.size = Pt(16)
     h1.font.bold = True
-    h1.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+    h1.font.color.rgb = RGBColor.from_string(INK)
     h1.paragraph_format.space_before = Pt(18)
     h1.paragraph_format.space_after = Pt(10)
     h1.paragraph_format.left_indent = Pt(10)
@@ -55,7 +57,7 @@ def register_heading_styles(doc) -> None:
     h2.font.size = Pt(13)
     h2.font.bold = True
     h2.font.italic = True
-    h2.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+    h2.font.color.rgb = RGBColor.from_string(INK)
     h2.paragraph_format.space_before = Pt(14)
     h2.paragraph_format.space_after = Pt(6)
     h2.paragraph_format.keep_with_next = True
@@ -66,7 +68,7 @@ def register_heading_styles(doc) -> None:
     h3.font.size = Pt(11.5)
     h3.font.bold = True
     h3.font.italic = False
-    h3.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    h3.font.color.rgb = RGBColor.from_string(INK)
     h3.paragraph_format.space_before = Pt(10)
     h3.paragraph_format.space_after = Pt(4)
     h3.paragraph_format.keep_with_next = True
@@ -79,7 +81,7 @@ def register_remaining_styles(doc) -> None:
     fc = _get_or_add_paragraph_style(doc, "TME Figure Caption")
     fc.font.name = "Georgia"
     fc.font.size = Pt(10)
-    fc.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    fc.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
     fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     fc.paragraph_format.space_before = Pt(18)
     fc.paragraph_format.space_after = Pt(6)
@@ -88,7 +90,7 @@ def register_remaining_styles(doc) -> None:
     tc = _get_or_add_paragraph_style(doc, "TME Table Caption")
     tc.font.name = "Georgia"
     tc.font.size = Pt(10)
-    tc.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    tc.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
     tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     tc.paragraph_format.space_before = Pt(18)
     tc.paragraph_format.space_after = Pt(6)
@@ -97,7 +99,7 @@ def register_remaining_styles(doc) -> None:
     fn = _get_or_add_paragraph_style(doc, "TME Footnote")
     fn.font.name = "Georgia"
     fn.font.size = Pt(9)
-    fn.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    fn.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
     fn.paragraph_format.line_spacing = 1.2
     fn.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
@@ -114,7 +116,7 @@ def register_remaining_styles(doc) -> None:
     pq.font.name = "Georgia"
     pq.font.size = Pt(15)
     pq.font.italic = True
-    pq.font.color.rgb = RGBColor(0x1A, 0x1A, 0x1A)
+    pq.font.color.rgb = RGBColor.from_string(INK)
     pq.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     pq.paragraph_format.line_spacing = 1.5
     pq.paragraph_format.space_before = Pt(22)
@@ -124,7 +126,7 @@ def register_remaining_styles(doc) -> None:
     bq = _get_or_add_paragraph_style(doc, "TME Block Quote")
     bq.font.name = "Georgia"
     bq.font.size = Pt(10.5)
-    bq.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    bq.font.color.rgb = RGBColor.from_string(BLOCKQUOTE_INK)
     bq.paragraph_format.left_indent = Pt(28)
     bq.paragraph_format.right_indent = Pt(28)
     bq.paragraph_format.line_spacing = 1.0
