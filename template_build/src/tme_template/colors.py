@@ -20,9 +20,3 @@ LINE = "BBBBBB"            # cover rules, date separators, footer top rule
 # Panels (non-text)
 LIGHT_PANEL_GRAY = "F5F5F5"  # tagline strip background
 FOOTER_CREAM = "FAFAF7"      # cover footer background
-
-# ---------- Deprecated aliases (remove after Task 12 migration completes) ----------
-# Kept so existing callers continue to import successfully during the refactor.
-# Task 12h removes these and flips the test to assert they are gone.
-TAGLINE_GRAY = META   # deprecated — callers migrate to META
-RULE_GRAY = LINE      # deprecated — callers migrate to LINE

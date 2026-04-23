@@ -17,9 +17,6 @@ def test_palette_accents_defined():
     assert colors.FOOTER_CREAM == "FAFAF7"
 
 
-def test_deprecation_aliases_resolve_to_new_palette():
-    # Deprecated aliases are kept through the migration so tagline.py and any
-    # other importer keeps working until Task 12 removes each usage. Final
-    # removal happens at the end of the migration (Task 12h).
-    assert colors.TAGLINE_GRAY == colors.META
-    assert colors.RULE_GRAY == colors.LINE
+def test_removed_constants_are_gone():
+    assert not hasattr(colors, "TAGLINE_GRAY")
+    assert not hasattr(colors, "RULE_GRAY")
