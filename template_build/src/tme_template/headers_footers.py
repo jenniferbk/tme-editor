@@ -4,6 +4,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
+from tme_template.colors import INK, LINE, META
 from tme_template.oxml_helpers import apply_top_rule
 
 
@@ -19,7 +20,7 @@ def _add_italic_gray_line(container, text: str, align):
     r.font.name = "Georgia"
     r.font.size = Pt(10.5)
     r.font.italic = True
-    r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    r.font.color.rgb = RGBColor.from_string(META)
     return p
 
 
@@ -62,12 +63,12 @@ def _build_footer(container):
     _clear(container)
     p = container.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    apply_top_rule(p, hex_color="EEEEEE", width_pt=1)  # palette migration in Task 12
+    apply_top_rule(p, hex_color=LINE, width_pt=1)
     run = p.add_run()
     run.font.name = "Georgia"
     run.font.size = Pt(9.5)
     run.font.bold = True
-    run.font.color.rgb = RGBColor(0x22, 0x22, 0x22)  # palette migration in Task 12
+    run.font.color.rgb = RGBColor.from_string(INK)
     _add_page_field(run)
 
 
