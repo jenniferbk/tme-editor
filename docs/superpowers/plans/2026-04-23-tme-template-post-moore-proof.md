@@ -767,60 +767,62 @@ EOF
 ## Task 8: Update callers of `set_running_footer`
 
 **Files:**
-- Modify: `tme_editor_app/src/article_starter.py:133-135`
-- Modify: `template_build/src/build_template.py:148-150`
+- Modify: `tme_editor_app/src/article_starter.py` (the `set_running_footer` call near the end of `build_article_starter`)
+- Modify: `template_build/src/build_template.py` (the `set_running_footer` call near the end of `build`)
+- Modify: `tme_editor_app/src/apply_styles.py` (any `set_running_footer` call it makes)
+- Modify: `moore_build/src/moore_pipeline/moore_starter.py` (the `set_running_footer` call in the legacy Moore starter builder)
 
-- [ ] **Step 1: Update `tme_editor_app/src/article_starter.py`**
+These four files are the full set of live `set_running_footer` callers in the repo. Missing any of them leaves a `TypeError` at runtime after Task 7's signature change.
 
-Find:
+- [ ] **Step 1: Enumerate call sites**
 
-```python
-    set_running_footer(doc,
-        copyright_line=f"© {meta.year} The Authors  ·  CC BY 4.0",
-        section=body_section)
-```
+Run: `cd /Users/jenniferkleiman/Documents/tme-editor && grep -rn "set_running_footer" --include='*.py'`
+Expected: four definitions/uses — one `def` in `headers_footers.py`, plus four call sites in the four files above. If you find additional call sites, stop and escalate.
 
-Replace with:
+- [ ] **Step 2: Update each caller**
 
-```python
-    set_running_footer(doc, section=body_section)
-```
-
-- [ ] **Step 2: Update `template_build/src/build_template.py`**
-
-Find:
+In every listed file, find the `set_running_footer(...)` call and drop the `copyright_line=...` keyword argument. Keep the `section=...` kwarg and the `doc` positional. The common pattern before → after is:
 
 ```python
-    set_running_footer(doc,
-        copyright_line="© 2026 The Authors  ·  CC BY 4.0",
-        section=body_section)
+# before
+set_running_footer(doc,
+    copyright_line=f"© {meta.year} The Authors  ·  CC BY 4.0",
+    section=body_section)
+
+# after
+set_running_footer(doc, section=body_section)
 ```
 
-Replace with:
+Specifically:
 
-```python
-    set_running_footer(doc, section=body_section)
-```
+- `tme_editor_app/src/article_starter.py` — the existing call uses `copyright_line=f"© {meta.year} The Authors  ·  CC BY 4.0"`. Remove just that kwarg.
+- `template_build/src/build_template.py` — the existing call uses `copyright_line="© 2026 The Authors  ·  CC BY 4.0"`. Remove just that kwarg.
+- `tme_editor_app/src/apply_styles.py` — inspect the file to find the call, remove `copyright_line=...`. If the call constructs an `f"© {meta.year}..."` string only for this kwarg and nothing else references it, also remove the now-dead local variable or expression (but leave `meta.year` itself alone if it's used elsewhere).
+- `moore_build/src/moore_pipeline/moore_starter.py` — same treatment.
+
+Do not modify anything else in these files.
 
 - [ ] **Step 3: Run all template tests to catch regressions**
 
-Run: `cd /Users/jenniferkleiman/Documents/tme-editor && python -m pytest template_build/tests -v`
-Expected: everything passes. In particular, `test_headers_footers_update.py` still passes and nothing else calls the removed parameter.
+Run: `cd /Users/jenniferkleiman/Documents/tme-editor && python3 -m pytest template_build/tests -v`
+Expected: everything passes. `test_headers_footers_update.py` still passes and nothing else calls the removed parameter.
 
-- [ ] **Step 4: Syntax-check the two edited files**
+- [ ] **Step 4: Syntax-check the four edited files**
 
-Run: `cd /Users/jenniferkleiman/Documents/tme-editor && python -m py_compile tme_editor_app/src/article_starter.py template_build/src/build_template.py`
+Run: `cd /Users/jenniferkleiman/Documents/tme-editor && python3 -m py_compile tme_editor_app/src/article_starter.py template_build/src/build_template.py tme_editor_app/src/apply_styles.py moore_build/src/moore_pipeline/moore_starter.py`
 Expected: no output, no error. (`py_compile` validates syntax without executing imports, so it doesn't depend on the palette migration being complete.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tme_editor_app/src/article_starter.py template_build/src/build_template.py
+git add tme_editor_app/src/article_starter.py template_build/src/build_template.py tme_editor_app/src/apply_styles.py moore_build/src/moore_pipeline/moore_starter.py
 git commit -m "$(cat <<'EOF'
-Drop copyright_line from set_running_footer callers
+Drop copyright_line from all set_running_footer callers
 
-article_starter and build_template now invoke the simplified footer
-signature. No behavior change beyond what the previous commit made.
+Four call sites migrate to the simplified footer signature:
+article_starter, build_template, apply_styles, and the legacy
+moore_pipeline.moore_starter. No behavior change beyond what the
+previous commit made.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
