@@ -74,23 +74,24 @@ def register_heading_styles(doc) -> None:
 
 
 def register_remaining_styles(doc) -> None:
-    # Figure captions go BELOW figures (APA 7) — the "glue" must be on the
-    # figure paragraph above, not on the caption itself. Applied at fixup time.
+    # APA 7: figure and table captions both sit ABOVE their element, flush left.
+    # keep_with_next on the caption itself glues it to the figure/table below.
     fc = _get_or_add_paragraph_style(doc, "TME Figure Caption")
     fc.font.name = "Georgia"
     fc.font.size = Pt(10)
     fc.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
-    fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    fc.paragraph_format.space_before = Pt(8)
-    fc.paragraph_format.space_after = Pt(18)
+    fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    fc.paragraph_format.space_before = Pt(18)
+    fc.paragraph_format.space_after = Pt(6)
+    fc.paragraph_format.keep_with_next = True
 
     tc = _get_or_add_paragraph_style(doc, "TME Table Caption")
     tc.font.name = "Georgia"
     tc.font.size = Pt(10)
     tc.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
-    tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     tc.paragraph_format.space_before = Pt(18)
-    tc.paragraph_format.space_after = Pt(8)
+    tc.paragraph_format.space_after = Pt(6)
     tc.paragraph_format.keep_with_next = True
 
     fn = _get_or_add_paragraph_style(doc, "TME Footnote")
