@@ -2,7 +2,7 @@
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
-from tme_template.colors import FOOTER_CREAM, UGA_RED
+from tme_template.colors import FOOTER_CREAM, TEXT_MUTED, UGA_RED
 from tme_template.oxml_helpers import (
     force_table_full_width,
     remove_cell_borders,
@@ -50,7 +50,7 @@ def add_cover_footer(section, *, citation: str, license_text: str,
     r_cite = p.add_run(citation)
     r_cite.font.name = "Arial"
     r_cite.font.size = Pt(8)
-    r_cite.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    r_cite.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
 
     # Right cell: license + copyright, all one paragraph, right-aligned
     p_r = right.paragraphs[0]
@@ -61,4 +61,4 @@ def add_cover_footer(section, *, citation: str, license_text: str,
     r_lic = p_r.add_run(f"{license_text}  ·  {copyright_text}")
     r_lic.font.name = "Arial"
     r_lic.font.size = Pt(8)
-    r_lic.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    r_lic.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
