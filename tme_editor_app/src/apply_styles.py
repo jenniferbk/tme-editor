@@ -261,10 +261,7 @@ def apply_styles(docx_path: str, meta) -> dict:
             doc, author_cite=cite_last_names, short_title=short_title,
             section=body_section,
         )
-        set_running_footer(
-            doc, copyright_line=f"© {meta.year} The Authors  ·  CC BY 4.0",
-            section=body_section,
-        )
+        set_running_footer(doc, section=body_section)
         stats["footer_restored"] = True
     except Exception as e:
         stats["footer_restored"] = f"failed: {e}"

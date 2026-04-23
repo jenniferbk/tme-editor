@@ -178,11 +178,7 @@ def build_moore_starter(*, out_path: Path, headshots: Dict[str, Path]) -> None:
     )
 
     # Running footer: copyright line + page numbers
-    set_running_footer(
-        doc,
-        copyright_line="© 2026 The Authors  ·  CC BY 4.0",
-        section=body_section,
-    )
+    set_running_footer(doc, section=body_section)
 
     # Body placeholder paragraph
     doc.add_paragraph(PLACEHOLDER_TEXT, style="TME Body")

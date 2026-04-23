@@ -145,9 +145,7 @@ def build() -> Path:
         author_cite="[Short Author Cite]",
         short_title="[Short Title]",
         section=body_section)
-    set_running_footer(doc,
-        copyright_line="© 2026 The Authors  ·  CC BY 4.0",
-        section=body_section)
+    set_running_footer(doc, section=body_section)
 
     # --- Sample body page ---
     doc.add_paragraph("[Body Heading]", style="TME H1")

@@ -130,9 +130,7 @@ def build_article_starter(*, meta, headshots: Dict[str, Path], out_path: Path) -
         author_cite=cite_last_names,
         short_title=short_title,
         section=body_section)
-    set_running_footer(doc,
-        copyright_line=f"© {meta.year} The Authors  ·  CC BY 4.0",
-        section=body_section)
+    set_running_footer(doc, section=body_section)
 
     doc.add_paragraph(PLACEHOLDER_TEXT, style="TME Body")
 
