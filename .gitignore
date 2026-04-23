@@ -48,3 +48,6 @@ dist/
 # App test outputs (run-local only)
 tme_editor_app/_*.docx
 tme_editor_app/_test_output*
+
+# Brainstorming session mockups (local only)
+.superpowers/
