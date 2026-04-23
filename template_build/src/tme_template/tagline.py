@@ -2,7 +2,7 @@
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
-from tme_template.colors import LIGHT_PANEL_GRAY, TAGLINE_GRAY, UGA_RED
+from tme_template.colors import LIGHT_PANEL_GRAY, META, UGA_RED
 from tme_template.oxml_helpers import (
     force_table_full_width,
     remove_cell_borders,
@@ -29,7 +29,7 @@ def _gray_run(paragraph, text: str, *, name="Georgia", size_pt=11.0, italic=Fals
     r.font.name = name
     r.font.size = Pt(size_pt)
     r.font.italic = italic
-    r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+    r.font.color.rgb = RGBColor.from_string(META)
     return r
 
 
