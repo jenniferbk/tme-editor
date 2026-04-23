@@ -132,39 +132,7 @@ def add_research_article_cover(doc, data: CoverData) -> None:
     rule_p.paragraph_format.space_after = Pt(8)
     apply_bottom_rule(rule_p, hex_color="CCCCCC", width_pt=1)
 
-    # Abstract label and text
-    lbl = doc.add_paragraph()
-    lbl.paragraph_format.space_before = Pt(0)
-    lbl.paragraph_format.space_after = Pt(4)
-    _red_label(lbl, "ABSTRACT")
-
-    # Abstract — explicit compact formatting (Georgia 10pt, 1.3 line spacing, justified)
-    ab = doc.add_paragraph()
-    ab.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    ab.paragraph_format.space_before = Pt(0)
-    ab.paragraph_format.space_after = Pt(6)
-    ab.paragraph_format.line_spacing = 1.3
-    ab_run = ab.add_run(data.abstract)
-    ab_run.font.name = "Georgia"
-    ab_run.font.size = Pt(10)
-
-    # Keywords
-    kw = doc.add_paragraph()
-    kw.paragraph_format.space_before = Pt(0)
-    kw.paragraph_format.space_after = Pt(0)
-    r1 = kw.add_run("Keywords: ")
-    r1.bold = True
-    r1.font.name = "Georgia"
-    r1.font.size = Pt(9.5)
-    r_kw = kw.add_run(" · ".join(data.keywords))
-    r_kw.font.name = "Georgia"
-    r_kw.font.size = Pt(9.5)
-
-    # Rule + About the Authors label
-    rule_p2 = doc.add_paragraph()
-    rule_p2.paragraph_format.space_before = Pt(0)
-    rule_p2.paragraph_format.space_after = Pt(8)
-    apply_bottom_rule(rule_p2, hex_color="CCCCCC", width_pt=1)
+    # About the Authors label
     ab_lbl = doc.add_paragraph()
     ab_lbl.paragraph_format.space_before = Pt(0)
     ab_lbl.paragraph_format.space_after = Pt(4)
@@ -226,3 +194,37 @@ def add_research_article_cover(doc, data: CoverData) -> None:
         r_bio = p_bio.add_run(a.bio)
         r_bio.font.name = "Georgia"
         r_bio.font.size = Pt(8.5)
+
+    # Rule separating author block from abstract
+    rule_p2 = doc.add_paragraph()
+    rule_p2.paragraph_format.space_before = Pt(0)
+    rule_p2.paragraph_format.space_after = Pt(8)
+    apply_bottom_rule(rule_p2, hex_color="CCCCCC", width_pt=1)
+
+    # Abstract label and text
+    lbl = doc.add_paragraph()
+    lbl.paragraph_format.space_before = Pt(0)
+    lbl.paragraph_format.space_after = Pt(4)
+    _red_label(lbl, "ABSTRACT")
+
+    # Abstract — explicit compact formatting (Georgia 10pt, 1.3 line spacing, justified)
+    ab = doc.add_paragraph()
+    ab.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    ab.paragraph_format.space_before = Pt(0)
+    ab.paragraph_format.space_after = Pt(6)
+    ab.paragraph_format.line_spacing = 1.3
+    ab_run = ab.add_run(data.abstract)
+    ab_run.font.name = "Georgia"
+    ab_run.font.size = Pt(10)
+
+    # Keywords
+    kw = doc.add_paragraph()
+    kw.paragraph_format.space_before = Pt(0)
+    kw.paragraph_format.space_after = Pt(0)
+    r1 = kw.add_run("Keywords: ")
+    r1.bold = True
+    r1.font.name = "Georgia"
+    r1.font.size = Pt(9.5)
+    r_kw = kw.add_run(" · ".join(data.keywords))
+    r_kw.font.name = "Georgia"
+    r_kw.font.size = Pt(9.5)
