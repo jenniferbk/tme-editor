@@ -64,8 +64,8 @@ def register_heading_styles(doc) -> None:
     h3 = _get_or_add_paragraph_style(doc, "TME H3")
     h3.font.name = "Georgia"
     h3.font.size = Pt(11.5)
-    h3.font.bold = False
-    h3.font.italic = True
+    h3.font.bold = True
+    h3.font.italic = False
     h3.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
     h3.paragraph_format.space_before = Pt(10)
     h3.paragraph_format.space_after = Pt(4)

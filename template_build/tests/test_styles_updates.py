@@ -14,3 +14,20 @@ def test_title_has_12pt_space_before():
     register_title_style(doc)
     style = doc.styles["TME Title"]
     assert style.paragraph_format.space_before == Pt(12)
+
+
+def test_h3_is_bold_not_italic():
+    doc = Document()
+    register_heading_styles(doc)
+    h3 = doc.styles["TME H3"]
+    assert h3.font.bold is True
+    assert h3.font.italic is False
+
+
+def test_h1_and_h2_italicization_unchanged():
+    doc = Document()
+    register_heading_styles(doc)
+    h1 = doc.styles["TME H1"]
+    h2 = doc.styles["TME H2"]
+    assert h1.font.bold is True and h1.font.italic is not True
+    assert h2.font.bold is True and h2.font.italic is True
