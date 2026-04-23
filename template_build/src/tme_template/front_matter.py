@@ -8,6 +8,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
+from tme_template.colors import INK, META, UGA_RED
 from tme_template.oxml_helpers import apply_bottom_rule, remove_cell_borders, set_cell_shading
 
 
@@ -110,7 +111,7 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
     r.font.name = "Georgia"
     r.font.size = Pt(14)
     r.font.italic = True
-    r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    r.font.color.rgb = RGBColor.from_string(META)
 
     p_spacer2 = _add_p()
     p_spacer2.paragraph_format.space_before = Pt(100)
@@ -124,7 +125,7 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
     r1.font.name = "Arial"
     r1.font.size = Pt(10)
     r1.font.italic = True
-    r1.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
+    r1.font.color.rgb = RGBColor.from_string(META)
 
     if issue.cover_artist:
         p_art = _add_p()
@@ -133,7 +134,7 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
         r2.font.name = "Arial"
         r2.font.size = Pt(10)
         r2.font.italic = True
-        r2.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
+        r2.font.color.rgb = RGBColor.from_string(META)
 
 
 def _section_label(doc, text: str):
@@ -148,7 +149,7 @@ def _role_group(doc, role_label: str, names: List[str]):
     r.font.name = "Georgia"
     r.font.size = Pt(11)
     r.font.italic = True
-    r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+    r.font.color.rgb = RGBColor.from_string(META)
     for n in names:
         p_n = doc.add_paragraph()
         rn = p_n.add_run(n)
@@ -168,7 +169,7 @@ def _role_group_in_cell(cell, role_label: str, names: List[str]):
     r.font.name = "Georgia"
     r.font.size = Pt(11)
     r.font.italic = True
-    r.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+    r.font.color.rgb = RGBColor.from_string(META)
     for n in names:
         p_n = cell.add_paragraph()
         rn = p_n.add_run(n)
@@ -220,7 +221,7 @@ def add_formal_title_page(doc, issue: IssueInfo) -> None:
     r.font.name = "Georgia"
     r.font.size = Pt(36)
     r.font.bold = True
-    r.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+    r.font.color.rgb = RGBColor.from_string(INK)
 
     # Rule 1 — red bottom border paragraph, constrained to ~200px width
     p_rule = doc.add_paragraph()
@@ -235,7 +236,7 @@ def add_formal_title_page(doc, issue: IssueInfo) -> None:
     r.font.name = "Georgia"
     r.font.size = Pt(13)
     r.font.italic = True
-    r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+    r.font.color.rgb = RGBColor.from_string(META)
 
     # Rule 2 — red bottom border paragraph, same width constraint
     p_rule2 = doc.add_paragraph()
@@ -254,4 +255,4 @@ def add_formal_title_page(doc, issue: IssueInfo) -> None:
     r.font.name = "Georgia"
     r.font.size = Pt(14)
     r.font.italic = True
-    r.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+    r.font.color.rgb = RGBColor.from_string(META)
