@@ -327,6 +327,69 @@ def report_below_element_captions(doc) -> list:
     return reports
 
 
+def swap_captions_above(doc, report: list) -> int:
+    """Given entries from report_below_element_captions, move each caption
+    paragraph to sit immediately before its figure/table.
+
+    Operates at the XML element level. The caption paragraph's w:p element
+    is detached from its current location and inserted just before the
+    preceding w:p (image-bearing) or w:tbl element.
+
+    Indices in the report are interpreted against the CURRENT document state,
+    so callers should pass a freshly-generated report (do not cache across
+    swaps). Returns the number of paragraphs actually moved.
+    """
+    moved = 0
+    tag_p, tag_tbl = qn("w:p"), qn("w:tbl")
+    for entry in report:
+        # Re-resolve the caption paragraph each iteration since previous swaps
+        # change paragraph indices. Match by the preview text to stay robust.
+        preview = entry.get("preview", "")
+        kind = entry["kind"]
+        target_p = None
+        for p in doc.paragraphs:
+            if p.style is None:
+                continue
+            sn = p.style.name
+            if kind == "figure" and sn != "TME Figure Caption":
+                continue
+            if kind == "table" and sn != "TME Table Caption":
+                continue
+            if p.text.strip().startswith(preview.strip()):
+                target_p = p
+                break
+        if target_p is None:
+            continue
+
+        cap_el = target_p._p
+        parent = cap_el.getparent()
+        # Find the preceding image paragraph or table
+        prev = cap_el.getprevious()
+        # Skip empty-paragraph spacers (matching report_below_element_captions
+        # semantics — spacers are paragraphs with no text, no w:t, no drawing,
+        # no pict)
+        while prev is not None and prev.tag == tag_p:
+            has_content = (
+                prev.find(".//" + qn("w:t")) is not None or
+                prev.find(".//" + qn("w:drawing")) is not None or
+                prev.find(".//" + qn("w:pict")) is not None
+            )
+            if has_content:
+                break
+            prev = prev.getprevious()
+        if prev is None:
+            continue
+        if kind == "figure" and prev.tag != tag_p:
+            continue
+        if kind == "table" and prev.tag != tag_tbl:
+            continue
+
+        parent.remove(cap_el)
+        prev.addprevious(cap_el)
+        moved += 1
+    return moved
+
+
 def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
     """For content tables (skipping masthead + author card), strip run-level
     font name and size overrides inside cells so content renders at the body

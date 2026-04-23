@@ -69,3 +69,37 @@ def test_run_fixup_returns_captions_below_element_key():
         stats = fixup.run_fixup(str(path))
     assert "captions_below_element" in stats
     assert isinstance(stats["captions_below_element"], list)
+
+
+def test_swap_captions_above_moves_figure_caption_up():
+    doc = _make_doc_with_styles()
+    _add_fake_drawing_paragraph(doc)
+    doc.add_paragraph("Figure 1. Below.", style="TME Figure Caption")
+    doc.add_paragraph("Some body paragraph.", style="TME Body")
+
+    report = fixup.report_below_element_captions(doc)
+    assert len(report) == 1
+
+    moved = fixup.swap_captions_above(doc, report)
+    assert moved == 1
+
+    # After swap, caption should precede the drawing paragraph
+    texts = [p.text for p in doc.paragraphs]
+    cap_idx = next(i for i, t in enumerate(texts) if t.startswith("Figure 1"))
+    # Drawing paragraph is the one right AFTER the caption now
+    assert cap_idx < len(texts) - 1
+    # Re-run report: should be empty now
+    report2 = fixup.report_below_element_captions(doc)
+    assert report2 == []
+
+
+def test_swap_captions_above_moves_table_caption_up():
+    doc = _make_doc_with_styles()
+    doc.add_table(rows=2, cols=2)
+    doc.add_paragraph("Table 1. Below.", style="TME Table Caption")
+
+    report = fixup.report_below_element_captions(doc)
+    assert len(report) == 1
+    moved = fixup.swap_captions_above(doc, report)
+    assert moved == 1
+    assert fixup.report_below_element_captions(doc) == []
