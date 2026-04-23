@@ -28,6 +28,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
+from tme_template.colors import BLOCKQUOTE_INK
+
 
 # ---------- style definition updates ----------
 
@@ -83,7 +85,7 @@ def update_styles(doc) -> None:
         bq = styles.add_style("TME Block Quote", WD_STYLE_TYPE.PARAGRAPH)
     bq.font.name = "Georgia"
     bq.font.size = Pt(10.5)
-    bq.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    bq.font.color.rgb = RGBColor.from_string(BLOCKQUOTE_INK)
     bq.paragraph_format.left_indent = Pt(28)
     bq.paragraph_format.right_indent = Pt(28)
     bq.paragraph_format.line_spacing = 1.0
