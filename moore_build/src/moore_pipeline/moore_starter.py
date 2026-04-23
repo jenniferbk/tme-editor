@@ -177,7 +177,7 @@ def build_moore_starter(*, out_path: Path, headshots: Dict[str, Path]) -> None:
         section=body_section,
     )
 
-    # Running footer: copyright line + page numbers
+    # Running footer: page numbers (copyright notice removed post-Moore-proof)
     set_running_footer(doc, section=body_section)
 
     # Body placeholder paragraph

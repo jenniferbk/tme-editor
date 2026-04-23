@@ -36,7 +36,7 @@ for p in (
 from extractor import ArticleMeta, extract_manuscript_text, extract_metadata
 from pipeline import run_pipeline
 from apply_styles import apply_styles
-from fixup import run_fixup
+from fixup import run_fixup, swap_captions_above
 
 
 st.set_page_config(page_title="TME Editor", page_icon="📝", layout="wide")
@@ -253,7 +253,6 @@ if st.session_state.meta is not None:
                         swapped = 0
                         if swap_below_captions and below:
                             from docx import Document as _Doc
-                            from fixup import swap_captions_above
                             d = _Doc(str(proof_path))
                             swapped = swap_captions_above(d, below)
                             d.save(str(proof_path))

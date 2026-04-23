@@ -20,7 +20,7 @@ def _red_run(paragraph, text: str, size_pt: float):
     r = paragraph.add_run(text)
     r.font.name = "Arial"
     r.font.size = Pt(size_pt)
-    r.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+    r.font.color.rgb = RGBColor.from_string(UGA_RED)
     return r
 
 

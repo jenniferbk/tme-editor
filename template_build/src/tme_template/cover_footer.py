@@ -46,7 +46,7 @@ def add_cover_footer(section, *, citation: str, license_text: str,
     r_label.font.name = "Arial"
     r_label.font.size = Pt(8)
     r_label.font.bold = True
-    r_label.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+    r_label.font.color.rgb = RGBColor.from_string(UGA_RED)
     r_cite = p.add_run(citation)
     r_cite.font.name = "Arial"
     r_cite.font.size = Pt(8)

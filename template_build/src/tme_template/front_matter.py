@@ -53,11 +53,8 @@ def _red_run(p, text, *, size_pt=13, bold=True):
     r.font.name = "Arial"
     r.font.size = Pt(size_pt)
     r.font.bold = bold
-    r.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+    r.font.color.rgb = RGBColor.from_string(UGA_RED)
     return r
-
-
-FOOTER_CREAM = "FAFAF7"
 
 
 def add_issue_cover_page(doc, issue: IssueInfo) -> None:
@@ -228,7 +225,7 @@ def add_formal_title_page(doc, issue: IssueInfo) -> None:
     p_rule.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_rule.paragraph_format.left_indent = Inches(2.25)
     p_rule.paragraph_format.right_indent = Inches(2.25)
-    apply_bottom_rule(p_rule, hex_color="BA0C2F", width_pt=2)
+    apply_bottom_rule(p_rule, hex_color=UGA_RED, width_pt=2)
 
     p_ok = doc.add_paragraph()
     p_ok.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -243,7 +240,7 @@ def add_formal_title_page(doc, issue: IssueInfo) -> None:
     p_rule2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_rule2.paragraph_format.left_indent = Inches(2.25)
     p_rule2.paragraph_format.right_indent = Inches(2.25)
-    apply_bottom_rule(p_rule2, hex_color="BA0C2F", width_pt=2)
+    apply_bottom_rule(p_rule2, hex_color=UGA_RED, width_pt=2)
 
     p_iss = doc.add_paragraph()
     p_iss.alignment = WD_ALIGN_PARAGRAPH.CENTER

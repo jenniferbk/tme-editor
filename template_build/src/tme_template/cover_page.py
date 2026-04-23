@@ -37,7 +37,7 @@ def _red_label(paragraph, text: str, size_pt: float = 9):
     r.font.name = "Arial"
     r.font.size = Pt(size_pt)
     r.font.bold = True
-    r.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+    r.font.color.rgb = RGBColor.from_string(UGA_RED)
     return r
 
 
@@ -73,7 +73,7 @@ def add_research_article_cover(doc, data: CoverData) -> None:
             r_dag.font.name = "Georgia"
             r_dag.font.size = Pt(11)
             r_dag.font.superscript = True
-            r_dag.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+            r_dag.font.color.rgb = RGBColor.from_string(UGA_RED)
             r_dag.font.bold = True
 
     # Affiliations — superscript numbers, no brackets
@@ -98,7 +98,7 @@ def add_research_article_cover(doc, data: CoverData) -> None:
         p.paragraph_format.space_before = Pt(2)
         p.paragraph_format.space_after = Pt(0)
         r_dag = p.add_run("† ")
-        r_dag.font.color.rgb = RGBColor(0xBA, 0x0C, 0x2F)
+        r_dag.font.color.rgb = RGBColor.from_string(UGA_RED)
         r_dag.font.bold = True
         r = p.add_run(f"Corresponding author: {corres.email}")
         r.font.name = "Georgia"
