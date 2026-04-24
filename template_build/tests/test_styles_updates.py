@@ -10,11 +10,11 @@ from tme_template.styles import (
 )
 
 
-def test_title_has_12pt_space_before():
+def test_title_has_24pt_space_before():
     doc = Document()
     register_title_style(doc)
     style = doc.styles["TME Title"]
-    assert style.paragraph_format.space_before == Pt(12)
+    assert style.paragraph_format.space_before == Pt(24)
 
 
 def test_h3_is_bold_not_italic():

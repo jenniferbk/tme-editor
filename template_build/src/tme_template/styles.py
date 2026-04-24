@@ -34,7 +34,7 @@ def register_title_style(doc) -> None:
     style.font.color.rgb = RGBColor.from_string(INK)
     pf = style.paragraph_format
     pf.line_spacing = 1.15
-    pf.space_before = Pt(12)
+    pf.space_before = Pt(24)
     pf.space_after = Pt(10)
 
 
