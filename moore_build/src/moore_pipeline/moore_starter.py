@@ -114,8 +114,6 @@ def build_moore_starter(*, out_path: Path, headshots: Dict[str, Path]) -> None:
     add_cover_footer(
         masthead_section,
         citation=CITATION_APA,
-        license_text="CC BY 4.0",
-        copyright_text="© 2026 The Authors",
     )
 
     # --- Continuous section break: Section 1 (cover body, normal margins) ---

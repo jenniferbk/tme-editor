@@ -107,8 +107,6 @@ def build() -> Path:
     add_tagline_strip(doc)
     add_cover_footer(masthead_section,
         citation="[Author, A. (YYYY). Title. The Mathematics Educator, V(N), pp–pp.]",
-        license_text="CC BY 4.0",
-        copyright_text="© 2026 The Authors",
     )
     cover_body_section = add_continuous_section_break(doc)
     cover_body_section.page_width = Inches(8.5)

@@ -80,8 +80,6 @@ def build_article_starter(*, meta, headshots: Dict[str, Path], out_path: Path) -
     add_cover_footer(
         masthead_section,
         citation=_format_citation(meta),
-        license_text="CC BY 4.0",
-        copyright_text=f"© {meta.year} The Authors",
     )
 
     cover_body_section = add_continuous_section_break(doc)
