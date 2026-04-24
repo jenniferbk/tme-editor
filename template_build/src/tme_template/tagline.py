@@ -1,5 +1,7 @@
 """Generate the light-gray tagline strip that sits beneath the masthead."""
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from tme_template.colors import LIGHT_PANEL_GRAY, META, UGA_RED
@@ -44,6 +46,20 @@ def add_tagline_strip(doc) -> None:
     remove_cell_borders(cell)
     set_cell_shading(cell, LIGHT_PANEL_GRAY)
     force_table_full_width(table, total_width_inches=TOTAL_WIDTH + BLEED_INCHES)
+
+    # python-docx's default single-cell width for `add_table(rows=1, cols=1)` is
+    # the normal content width (~6.5"), not the page width. Setting the column
+    # width above doesn't propagate to the cell's tcW in this case, so the gray
+    # fill stops short of the right edge. Set the cell's tcW explicitly to
+    # match the full table grid.
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcW = tcPr.find(qn("w:tcW"))
+    if tcW is None:
+        tcW = OxmlElement("w:tcW")
+        tcPr.insert(0, tcW)
+    tcW.set(qn("w:w"), str(int((TOTAL_WIDTH + BLEED_INCHES) * 1440)))
+    tcW.set(qn("w:type"), "dxa")
+
     set_cell_margins(cell, top=80, bottom=80, left=160, right=160)
 
     # Tagline paragraph: ◆ italic-tagline ◆
