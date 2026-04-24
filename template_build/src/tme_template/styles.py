@@ -76,13 +76,16 @@ def register_heading_styles(doc) -> None:
 
 
 def register_remaining_styles(doc) -> None:
-    # APA 7: figure and table captions both sit ABOVE their element, flush left.
-    # keep_with_next on the caption itself glues it to the figure/table below.
+    # Captions sit ABOVE their element (APA 7 placement). Alignment is
+    # centered per editor preference — a deliberate override of APA 7's
+    # flush-left caption style because centered reads better in the TME
+    # journal layout. keep_with_next glues the caption to the figure/table
+    # below.
     fc = _get_or_add_paragraph_style(doc, "TME Figure Caption")
     fc.font.name = "Georgia"
     fc.font.size = Pt(10)
     fc.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
-    fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     fc.paragraph_format.space_before = Pt(24)
     fc.paragraph_format.space_after = Pt(6)
     fc.paragraph_format.keep_with_next = True
@@ -91,7 +94,7 @@ def register_remaining_styles(doc) -> None:
     tc.font.name = "Georgia"
     tc.font.size = Pt(10)
     tc.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
-    tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     tc.paragraph_format.space_before = Pt(24)
     tc.paragraph_format.space_after = Pt(6)
     tc.paragraph_format.keep_with_next = True

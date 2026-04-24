@@ -34,17 +34,17 @@ def test_h1_and_h2_italicization_unchanged():
     assert h2.font.bold is True and h2.font.italic is True
 
 
-def test_figure_caption_is_left_aligned_and_sticky():
+def test_figure_caption_is_centered_and_sticky():
     doc = Document()
     register_remaining_styles(doc)
     fc = doc.styles["TME Figure Caption"]
-    assert fc.paragraph_format.alignment == WD_ALIGN_PARAGRAPH.LEFT
+    assert fc.paragraph_format.alignment == WD_ALIGN_PARAGRAPH.CENTER
     assert fc.paragraph_format.keep_with_next is True
 
 
-def test_table_caption_is_left_aligned_and_sticky():
+def test_table_caption_is_centered_and_sticky():
     doc = Document()
     register_remaining_styles(doc)
     tc = doc.styles["TME Table Caption"]
-    assert tc.paragraph_format.alignment == WD_ALIGN_PARAGRAPH.LEFT
+    assert tc.paragraph_format.alignment == WD_ALIGN_PARAGRAPH.CENTER
     assert tc.paragraph_format.keep_with_next is True
