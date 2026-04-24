@@ -83,7 +83,7 @@ def register_remaining_styles(doc) -> None:
     fc.font.size = Pt(10)
     fc.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
     fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    fc.paragraph_format.space_before = Pt(18)
+    fc.paragraph_format.space_before = Pt(24)
     fc.paragraph_format.space_after = Pt(6)
     fc.paragraph_format.keep_with_next = True
 
@@ -92,7 +92,7 @@ def register_remaining_styles(doc) -> None:
     tc.font.size = Pt(10)
     tc.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
     tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    tc.paragraph_format.space_before = Pt(18)
+    tc.paragraph_format.space_before = Pt(24)
     tc.paragraph_format.space_after = Pt(6)
     tc.paragraph_format.keep_with_next = True
 

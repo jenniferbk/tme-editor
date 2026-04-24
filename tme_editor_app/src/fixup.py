@@ -331,15 +331,21 @@ def report_below_element_captions(doc) -> list:
 
 def swap_captions_above(doc, report: list) -> int:
     """Given entries from report_below_element_captions, move each caption
-    paragraph to sit immediately before its figure/table.
+    (including any contiguous same-style continuation paragraphs) to sit
+    immediately before its figure/table.
 
-    Operates at the XML element level. The caption paragraph's w:p element
-    is detached from its current location and inserted just before the
-    preceding w:p (image-bearing) or w:tbl element.
+    Operates at the XML element level. The caption's w:p element(s) are
+    detached from their current location and inserted just before the
+    preceding w:p (image-bearing) or w:tbl element, preserving original
+    ordering of the caption paragraphs.
+
+    Handles multi-paragraph captions: if the target caption is directly
+    followed by more paragraphs in the same style, they are moved as a
+    group so the continuation stays with the head.
 
     Indices in the report are interpreted against the CURRENT document state,
     so callers should pass a freshly-generated report (do not cache across
-    swaps). Returns the number of paragraphs actually moved.
+    swaps). Returns the number of caption GROUPS actually moved.
     """
     moved = 0
     tag_p, tag_tbl = qn("w:p"), qn("w:tbl")
@@ -363,10 +369,30 @@ def swap_captions_above(doc, report: list) -> int:
         if target_p is None:
             continue
 
-        cap_el = target_p._p
-        parent = cap_el.getparent()
+        first_cap_el = target_p._p
+
+        # Collect any contiguous same-style caption paragraphs following the
+        # target. This handles multi-paragraph captions — e.g., a caption body
+        # that the author broke across two paragraphs.
+        target_pPr = first_cap_el.find(qn("w:pPr"))
+        target_pStyle = target_pPr.find(qn("w:pStyle")) if target_pPr is not None else None
+        target_style_id = target_pStyle.get(qn("w:val")) if target_pStyle is not None else None
+
+        caption_els = [first_cap_el]
+        cursor = first_cap_el.getnext()
+        while cursor is not None and cursor.tag == tag_p:
+            pPr = cursor.find(qn("w:pPr"))
+            pStyle = pPr.find(qn("w:pStyle")) if pPr is not None else None
+            style_id = pStyle.get(qn("w:val")) if pStyle is not None else None
+            if style_id is not None and style_id == target_style_id:
+                caption_els.append(cursor)
+                cursor = cursor.getnext()
+            else:
+                break
+
+        parent = first_cap_el.getparent()
         # Find the preceding image paragraph or table
-        prev = cap_el.getprevious()
+        prev = first_cap_el.getprevious()
         # Skip empty-paragraph spacers (matching report_below_element_captions
         # semantics — spacers are paragraphs with no text, no w:t, no drawing,
         # no pict)
@@ -386,8 +412,10 @@ def swap_captions_above(doc, report: list) -> int:
         if kind == "table" and prev.tag != tag_tbl:
             continue
 
-        parent.remove(cap_el)
-        prev.addprevious(cap_el)
+        for cap_el in caption_els:
+            parent.remove(cap_el)
+        for cap_el in caption_els:
+            prev.addprevious(cap_el)
         moved += 1
     return moved
 

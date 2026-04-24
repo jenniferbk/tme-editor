@@ -103,3 +103,40 @@ def test_swap_captions_above_moves_table_caption_up():
     moved = fixup.swap_captions_above(doc, report)
     assert moved == 1
     assert fixup.report_below_element_captions(doc) == []
+
+
+def test_swap_captions_above_moves_multi_paragraph_caption_as_group():
+    """When an author breaks a caption across two paragraphs below a figure,
+    the swap should move both paragraphs above the figure together — not
+    leave the continuation stranded below."""
+    doc = _make_doc_with_styles()
+    _add_fake_drawing_paragraph(doc)
+    doc.add_paragraph(
+        "Figure 8. (a) Graphically representing the original Riemann Sum for n = 3, i = 2 and (b) the Riemann Sum in terms",
+        style="TME Figure Caption",
+    )
+    doc.add_paragraph(
+        "of and with respect to θ for n = 3, i = 2.",
+        style="TME Figure Caption",
+    )
+    doc.add_paragraph("Body text after caption.", style="TME Body")
+
+    report = fixup.report_below_element_captions(doc)
+    # Only the first caption paragraph is flagged (its preceding sibling is
+    # the image paragraph; the continuation's preceding sibling is caption 1,
+    # which doesn't match the flag criteria).
+    assert len(report) == 1
+    assert "Figure 8" in report[0]["preview"]
+
+    moved = fixup.swap_captions_above(doc, report)
+    assert moved == 1
+
+    # After swap, both caption paragraphs should precede the image, in order.
+    texts = [p.text for p in doc.paragraphs]
+    cap1_idx = next(i for i, t in enumerate(texts) if t.startswith("Figure 8"))
+    cap2_idx = next(i for i, t in enumerate(texts) if t.startswith("of and with respect"))
+    assert cap1_idx < cap2_idx, "caption order preserved"
+    # Continuation should NOT be stranded after any drawing paragraph.
+    # Re-run report: should be empty (no more below-element captions).
+    report2 = fixup.report_below_element_captions(doc)
+    assert report2 == []
