@@ -21,7 +21,7 @@ from tme_template.oxml_helpers import add_section_break_next_page, add_continuou
 from tme_template.headers_footers import set_running_headers, set_running_footer
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 LOGO_H = str(REPO_ROOT / "assets" / "tme-logo.jpg")
 
 
