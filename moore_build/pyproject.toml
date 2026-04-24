@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "moore-pipeline"
-version = "1.0.0"
+version = "1.1.0"
 description = "Automated preprocessing pipeline for the Moore article (TME Vol 34 No 1)"
 requires-python = ">=3.11"
 dependencies = [
