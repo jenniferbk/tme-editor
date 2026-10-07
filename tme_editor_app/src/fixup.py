@@ -24,6 +24,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
@@ -55,12 +56,16 @@ def update_styles(doc) -> None:
             h.paragraph_format.keep_with_next = True
             h.paragraph_format.keep_together = True
 
+    # Both caption styles are centered (see template styles.py). Re-assert it
+    # here so proofs built from an older starter pick up the same alignment.
     fc = styles["TME Figure Caption"]
     fc.font.name = "Georgia"
+    fc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     fc.paragraph_format.keep_with_next = True  # caption above → glue down to figure/table
 
     tc = styles["TME Table Caption"]
     tc.font.name = "Georgia"
+    tc.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     tc.paragraph_format.keep_with_next = True
 
     fn = styles["TME Footnote"]
@@ -215,6 +220,12 @@ def strip_reference_run_formatting(doc) -> int:
 # our paragraph styles.
 _PPR_STRIP_TAGS = ("w:spacing", "w:ind")
 
+# Captions additionally drop direct alignment so the style's CENTER wins.
+# Not applied to body paragraphs: image-holding TME Body paragraphs are
+# centered directly and must keep it.
+_PPR_STRIP_TAGS_CAPTION = _PPR_STRIP_TAGS + ("w:jc",)
+_CAPTION_STYLES = {"TME Figure Caption", "TME Table Caption"}
+
 # Run-property tags to strip on structural styles (headings, captions, body,
 # references). Leave w:i (italic), w:iCs, w:u (underline), w:color alone —
 # those are legitimate inline emphasis.
@@ -240,8 +251,9 @@ def strip_direct_formatting(doc) -> dict:
         # Paragraph-level strip
         pPr = p._p.find(qn("w:pPr"))
         para_changed = False
+        ppr_tags = _PPR_STRIP_TAGS_CAPTION if p.style.name in _CAPTION_STYLES else _PPR_STRIP_TAGS
         if pPr is not None:
-            for tag in _PPR_STRIP_TAGS:
+            for tag in ppr_tags:
                 for el in pPr.findall(qn(tag)):
                     pPr.remove(el)
                     para_changed = True

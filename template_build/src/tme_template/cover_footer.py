@@ -1,4 +1,6 @@
 """The cover-page footer: HOW TO CITE + citation, full-width single cell."""
+from typing import Sequence, Tuple, Union
+
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
@@ -11,11 +13,19 @@ from tme_template.oxml_helpers import (
 )
 
 
-def add_cover_footer(section, *, citation: str) -> None:
+# One run of the citation: (text, italic). A plain str is one non-italic run.
+CitationSegment = Tuple[str, bool]
+Citation = Union[str, Sequence[CitationSegment]]
+
+
+def add_cover_footer(section, *, citation: Citation) -> None:
     """Place the cover footer (HOW TO CITE + citation) inside the given section's
     footer slot. Appears at the bottom of every page in this section.
     Since the cover section is exactly one page (with continuous break above and
-    a next-page break after), it will only appear on the cover page."""
+    a next-page break after), it will only appear on the cover page.
+
+    `citation` is either a plain string or a sequence of (text, italic) segments
+    so the journal name and volume can be italicized per APA 7."""
     footer = section.footer
     footer.is_linked_to_previous = False
     for p in list(footer.paragraphs):
@@ -41,7 +51,11 @@ def add_cover_footer(section, *, citation: str) -> None:
     r_label.font.size = Pt(8)
     r_label.font.bold = True
     r_label.font.color.rgb = RGBColor.from_string(UGA_RED)
-    r_cite = p.add_run(citation)
-    r_cite.font.name = "Arial"
-    r_cite.font.size = Pt(8)
-    r_cite.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
+    segments = [(citation, False)] if isinstance(citation, str) else citation
+    for text, italic in segments:
+        r_cite = p.add_run(text)
+        r_cite.font.name = "Arial"
+        r_cite.font.size = Pt(8)
+        r_cite.font.color.rgb = RGBColor.from_string(TEXT_MUTED)
+        if italic:
+            r_cite.font.italic = True

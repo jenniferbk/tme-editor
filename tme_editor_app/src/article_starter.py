@@ -3,7 +3,7 @@ formatted TME starter .docx with cover page + placeholder body section.
 
 This is the generalized version of moore_pipeline.moore_starter."""
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from docx import Document
 from docx.shared import Inches
@@ -32,8 +32,9 @@ PLACEHOLDER_TEXT = (
 )
 
 
-def _format_citation(meta) -> str:
-    """APA-ish one-line citation suitable for the cover footer."""
+def _format_citation(meta) -> List[Tuple[str, bool]]:
+    """APA-ish one-line citation for the cover footer, as (text, italic)
+    segments: the journal name and volume number are italicized (APA 7)."""
     if not meta.authors:
         authors = "Anonymous"
     else:
@@ -49,11 +50,13 @@ def _format_citation(meta) -> str:
         else:
             authors = ", ".join(parts[:-1]) + f", & {parts[-1]}"
     title_short = meta.title if len(meta.title) < 120 else meta.title[:117] + "..."
-    return (
-        f"{authors} ({meta.year}). {title_short}. "
-        f"The Mathematics Educator, {meta.volume}({meta.number}), "
-        f"{meta.pages.replace('–', '–')}."
-    )
+    return [
+        (f"{authors} ({meta.year}). {title_short}. ", False),
+        ("The Mathematics Educator", True),
+        (", ", False),
+        (str(meta.volume), True),
+        (f"({meta.number}), {meta.pages.replace('–', '–')}.", False),
+    ]
 
 
 def build_article_starter(*, meta, headshots: Dict[str, Path], out_path: Path) -> None:
