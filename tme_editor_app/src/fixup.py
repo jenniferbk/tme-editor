@@ -35,6 +35,7 @@ from docx.text.paragraph import Paragraph
 
 from apply_styles import FIG_PAT, TAB_PAT, find_body_start_index
 from tme_template.colors import BLOCKQUOTE_INK
+from tme_template.layout import MASTHEAD_LEFT_WIDTH, MASTHEAD_RIGHT_WIDTH
 
 
 # ---------- style definition updates ----------
@@ -238,12 +239,30 @@ def _is_spacer(p_el) -> bool:
 
 
 def _body_paragraphs(doc) -> list:
-    """Paragraphs of the article body: everything after the last
-    paragraph-embedded section break (the cover sections precede it). With no
+    """Paragraphs of the article body: everything after the starter's
+    second paragraph-embedded section break (the cover sections precede it). With no
     embedded break (plain test documents) every paragraph counts."""
     paras = list(doc.paragraphs)
     start = find_body_start_index(paras)
     return paras if start is None else paras[start:]
+
+
+def cover_table_count(doc) -> int:
+    """Number of tables that precede the article body (masthead, tagline and
+    author card in a fresh starter; two if Word merged the first pair). Skip
+    these by position rather than by hard-coded index."""
+    paras = list(doc.paragraphs)
+    start = find_body_start_index(paras)
+    if start is None:
+        return 0
+    start_el = paras[start]._p if start < len(paras) else None
+    n = 0
+    for el in doc.element.body.iterchildren():
+        if el is start_el:
+            break
+        if el.tag == qn("w:tbl"):
+            n += 1
+    return n
 
 
 def _fold_title_into_label(label_p, title_p) -> None:
@@ -579,12 +598,15 @@ def swap_captions_above(doc, report: list) -> int:
     return moved
 
 
-def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
-    """For content tables (not the cover tables), put every cell paragraph in
+def normalize_table_cells(doc, skip_indices=None) -> int:
+    """For content tables (not the cover tables; skip_indices=None skips
+    the first cover_table_count(doc) tables), put every cell paragraph in
     TME Table Text and strip run-level font name and size overrides, so
     pasted tables render in Georgia rather than the theme font. Bold and
     italic are kept; they carry meaning in tables. Returns the number of
     run elements stripped."""
+    if skip_indices is None:
+        skip_indices = range(cover_table_count(doc))
     tt = doc.styles["TME Table Text"]
     n = 0
     for i, table in enumerate(doc.tables):
@@ -625,13 +647,14 @@ def _set_trPr_flag(tr, tag_name: str) -> None:
         trPr.append(el)
 
 
-def fix_content_tables(doc, skip_indices=(0, 1)) -> int:
+def fix_content_tables(doc, skip_indices=None) -> int:
     """Center content tables, prevent row splits, repeat header row.
 
-    skip_indices are masthead (0) and the author-card table (1) in our
-    standard starter layout. If the docx structure differs, the caller can
-    override.
+    skip_indices=None skips the cover tables, found by position with
+    cover_table_count(doc). The caller can pass explicit indices instead.
     """
+    if skip_indices is None:
+        skip_indices = range(cover_table_count(doc))
     n = 0
     for i, table in enumerate(doc.tables):
         if i in skip_indices:
@@ -665,8 +688,7 @@ def fix_masthead_grid(doc) -> bool:
     table = doc.tables[0]
     tbl = table._tbl
 
-    BLEED = 90  # twips
-    COL0, COL1 = 4651, 7589 + BLEED
+    COL0, COL1 = MASTHEAD_LEFT_WIDTH.twips, MASTHEAD_RIGHT_WIDTH.twips
     TOTAL = COL0 + COL1
 
     existing_grid = tbl.find(qn("w:tblGrid"))

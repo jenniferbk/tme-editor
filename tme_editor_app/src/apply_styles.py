@@ -14,6 +14,8 @@ from typing import List, Optional
 from docx import Document
 from docx.oxml.ns import qn
 
+from article_starter import author_cite_text
+
 
 # A caption label at the start of a paragraph: "Figure 1." / "Table 2:" /
 # "Figure A1.". The period or colon after the number is what separates a
@@ -33,20 +35,27 @@ def _first_nonempty_run(p):
     return None
 
 
+# The starter embeds exactly two section breaks before the body: masthead →
+# cover (continuous) and cover → body (next page). Anything the editor pastes
+# after that (a landscape section for a wide table) adds more, so count from
+# the front rather than taking the last one.
+STARTER_COVER_SECTION_BREAKS = 2
+
+
+def _has_embedded_sectpr(p) -> bool:
+    pPr = p._p.find(qn("w:pPr"))
+    return pPr is not None and pPr.find(qn("w:sectPr")) is not None
+
+
 def find_body_start_index(paragraphs) -> Optional[int]:
-    """The body section is the LAST section in our starter structure. Its
-    content begins immediately after the last paragraph-embedded sectPr.
-    (The very last section's sectPr lives outside any paragraph at the body
-    element's tail, so iterating paragraphs naturally stops at the second-to-last
-    section's sectPr — which is exactly the one preceding body content.)"""
-    last_idx = None
-    for i, p in enumerate(paragraphs):
-        pPr = p._p.find(qn("w:pPr"))
-        if pPr is None:
-            continue
-        if pPr.find(qn("w:sectPr")) is not None:
-            last_idx = i
-    return (last_idx + 1) if last_idx is not None else None
+    """Index of the first body paragraph, or None when the document has no
+    paragraph-embedded section break at all (a plain document: everything
+    is body)."""
+    breaks = [i for i, p in enumerate(paragraphs) if _has_embedded_sectpr(p)]
+    if not breaks:
+        return None
+    k = min(STARTER_COVER_SECTION_BREAKS, len(breaks)) - 1
+    return breaks[k] + 1
 
 
 def _looks_like_cover_duplicate(text: str, meta) -> bool:
@@ -273,16 +282,11 @@ def apply_styles(docx_path: str, meta) -> dict:
     # the editor pastes into it; calling our footer builders again resets this.
     try:
         from tme_template.headers_footers import set_running_footer, set_running_headers
-        body_section = doc.sections[-1]
-        cite_last_names = " & ".join(
-            a.name.rsplit(" ", 1)[-1] for a in (meta.authors or []) if a.name
-        ) or "Author"
+        cite = author_cite_text(meta)
         short_title = meta.title if len(meta.title) < 60 else meta.title[:57] + "..."
-        set_running_headers(
-            doc, author_cite=cite_last_names, short_title=short_title,
-            section=body_section,
-        )
-        set_running_footer(doc, section=body_section)
+        for body_section in doc.sections[STARTER_COVER_SECTION_BREAKS:]:
+            set_running_headers(doc, author_cite=cite, short_title=short_title, section=body_section)
+            set_running_footer(doc, section=body_section)
         stats["footer_restored"] = True
     except Exception as e:
         stats["footer_restored"] = f"failed: {e}"

@@ -58,6 +58,18 @@ def _format_citation(meta) -> List[Tuple[str, bool]]:
     ]
 
 
+def author_cite_text(meta) -> str:
+    """Running-head author form: 'Moore', 'Moore & Yasuda', 'Moore et al.'"""
+    lasts = [a.name.rsplit(" ", 1)[-1] for a in (meta.authors or []) if a.name]
+    if not lasts:
+        return "Author"
+    if len(lasts) == 1:
+        return lasts[0]
+    if len(lasts) == 2:
+        return f"{lasts[0]} & {lasts[1]}"
+    return f"{lasts[0]} et al."
+
+
 def build_article_starter(*, meta, headshots: Dict[str, Path], out_path: Path) -> None:
     """Generate a starter .docx for any article. `headshots` maps author name to
     a framed headshot path (as produced by prepare_headshots)."""
@@ -122,12 +134,9 @@ def build_article_starter(*, meta, headshots: Dict[str, Path], out_path: Path) -
     ))
 
     body_section = add_section_break_next_page(doc)
-    cite_last_names = " & ".join(
-        a.name.rsplit(" ", 1)[-1] for a in meta.authors
-    ) or "Author"
     short_title = meta.title if len(meta.title) < 60 else meta.title[:57] + "..."
     set_running_headers(doc,
-        author_cite=cite_last_names,
+        author_cite=author_cite_text(meta),
         short_title=short_title,
         section=body_section)
     set_running_footer(doc, section=body_section)
