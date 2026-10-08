@@ -35,20 +35,6 @@ def remove_cell_borders(cell) -> None:
         side_el.set(qn("w:color"), "auto")
 
 
-def set_different_odd_even_pages(doc) -> None:
-    """Enable 'Different Odd & Even Pages' at document level."""
-    settings = doc.settings.element
-    existing = settings.find(qn("w:evenAndOddHeaders"))
-    if existing is None:
-        el = OxmlElement("w:evenAndOddHeaders")
-        settings.append(el)
-
-
-def set_different_first_page(section, value: bool) -> None:
-    """Enable 'Different First Page' on a section."""
-    section.different_first_page_header_footer = value
-
-
 def _ensure_pBdr(paragraph):
     pPr = paragraph._p.get_or_add_pPr()
     pBdr = pPr.find(qn("w:pBdr"))

@@ -19,21 +19,30 @@ Citation = Union[str, Sequence[CitationSegment]]
 
 
 def add_cover_footer(section, *, citation: Citation) -> None:
-    """Place the cover footer (HOW TO CITE + citation) inside the given section's
-    footer slot. Appears at the bottom of every page in this section.
-    Since the cover section is exactly one page (with continuous break above and
-    a next-page break after), it will only appear on the cover page.
+    """Place the cover footer (HOW TO CITE + citation) in the given section's
+    footer slots. Appears at the bottom of every page in this section. Since
+    the cover section is exactly one page (continuous break above, next-page
+    break after), it only appears on the cover page.
 
-    `citation` is either a plain string or a sequence of (text, italic) segments
-    so the journal name and volume can be italicized per APA 7."""
-    footer = section.footer
-    footer.is_linked_to_previous = False
+    Different odd/even pages is on document-wide (page_setup), and an
+    assembled issue can put an article cover on an even page, so both the
+    default (odd) and the even footer are filled.
+
+    `citation` is either a plain string or a sequence of (text, italic)
+    segments so the journal name and volume can be italicized per APA 7."""
+    for footer in (section.footer, section.even_page_footer):
+        footer.is_linked_to_previous = False
+        _fill_cover_footer(footer, citation)
+
+
+def _fill_cover_footer(footer, citation: Citation) -> None:
     for p in list(footer.paragraphs):
         p._p.getparent().remove(p._p)
 
     table = footer.add_table(rows=1, cols=1, width=Inches(7.5))
     table.autofit = False
     table.columns[0].width = Inches(7.5)
+    table.cell(0, 0).width = Inches(7.5)
     force_table_full_width(table, total_width_inches=7.5, left_indent_inches=0.5)
 
     cell = table.cell(0, 0)
