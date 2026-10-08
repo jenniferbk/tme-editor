@@ -54,8 +54,8 @@ def test_grayscale_jpeg_is_handled(tmp_path):
 
 
 def test_circle_mask_is_anti_aliased():
-    values = set(circle_mask(64).getdata())
-    assert values - {0, 255}, "edge should contain intermediate gray values"
+    hist = circle_mask(64).histogram()
+    assert sum(hist[1:255]) > 0, "edge should contain intermediate gray values"
 
 
 def test_returns_whether_a_face_was_used(tmp_path):
