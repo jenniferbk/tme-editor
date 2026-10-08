@@ -11,7 +11,8 @@ makes necessary:
   - list direct-spacing clear
   - table centering + cantSplit + tblHeader
   - masthead grid rewrite (defensive, in case Word merged adjacent tables)
-  - reference run format strip
+  - run-level font/size strip on structural styles (reaches hyperlink runs)
+  - content-table cells → TME Table Text
   - footnote font + size normalization (zip-level edit of footnotes.xml)
 """
 from __future__ import annotations
@@ -100,6 +101,16 @@ def update_styles(doc) -> None:
     bq.paragraph_format.line_spacing = 1.0
     bq.paragraph_format.space_before = Pt(8)
     bq.paragraph_format.space_after = Pt(8)
+
+    if "TME Table Text" in style_names:
+        tt = styles["TME Table Text"]
+    else:
+        tt = styles.add_style("TME Table Text", WD_STYLE_TYPE.PARAGRAPH)
+    tt.font.name = "Georgia"
+    tt.font.size = Pt(10)
+    tt.paragraph_format.line_spacing = 1.0
+    tt.paragraph_format.space_before = Pt(0)
+    tt.paragraph_format.space_after = Pt(2)
 
     if "List Paragraph" in style_names:
         lp = styles["List Paragraph"]
@@ -343,20 +354,12 @@ def clear_list_direct_spacing(doc) -> int:
     return n
 
 
-def strip_reference_run_formatting(doc) -> int:
-    n = 0
-    for p in doc.paragraphs:
-        if p.style.name != "TME Reference":
-            continue
-        for r in p.runs:
-            rPr = r._r.find(qn("w:rPr"))
-            if rPr is None:
-                continue
-            for tag in ("w:sz", "w:szCs", "w:b", "w:bCs", "w:rFonts"):
-                for el in rPr.findall(qn(tag)):
-                    rPr.remove(el)
-                    n += 1
-    return n
+def _iter_runs(p) -> list:
+    """Every run in the paragraph, including runs inside w:hyperlink and
+    w:ins. Paragraph.runs returns only direct w:r children, which is how a
+    hyperlinked DOI kept Times New Roman while the rest went Georgia."""
+    from docx.text.run import Run
+    return [Run(r, p) for r in p._p.iter(qn("w:r"))]
 
 
 # Paragraph-property tags to strip from TME-styled paragraphs. These are the
@@ -403,7 +406,7 @@ def strip_direct_formatting(doc) -> dict:
                     para_changed = True
         # Run-level strip
         run_changed = False
-        for r in p.runs:
+        for r in _iter_runs(p):
             rPr = r._r.find(qn("w:rPr"))
             if rPr is None:
                 continue
@@ -577,9 +580,12 @@ def swap_captions_above(doc, report: list) -> int:
 
 
 def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
-    """For content tables (skipping masthead + author card), strip run-level
-    font name and size overrides inside cells so content renders at the body
-    font (Georgia). Preserves bold/italic which are used for emphasis."""
+    """For content tables (not the cover tables), put every cell paragraph in
+    TME Table Text and strip run-level font name and size overrides, so
+    pasted tables render in Georgia rather than the theme font. Bold and
+    italic are kept; they carry meaning in tables. Returns the number of
+    run elements stripped."""
+    tt = doc.styles["TME Table Text"]
     n = 0
     for i, table in enumerate(doc.tables):
         if i in skip_indices:
@@ -587,7 +593,8 @@ def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    for r in p.runs:
+                    p.style = tt
+                    for r in _iter_runs(p):
                         rPr = r._r.find(qn("w:rPr"))
                         if rPr is None:
                             continue
@@ -723,31 +730,32 @@ def fix_masthead_grid(doc) -> bool:
 
 # ---------- footnote font + size fix (zip-level) ----------
 
-def fix_footnote_fonts(docx_path: Path) -> dict:
-    src = str(docx_path)
-    with zipfile.ZipFile(src, "r") as z:
-        if "word/footnotes.xml" not in z.namelist():
-            return {"rfonts_rewritten": 0, "rfonts_injected": 0, "sz_stripped": 0}
-        with z.open("word/footnotes.xml") as f:
-            xml = f.read().decode("utf-8")
+# Fonts whose glyphs are not letters; rewriting them to Georgia changes the
+# symbol shown (Symbol-font bullets, math operators, Wingdings marks).
+_KEEP_FONTS_RE = re.compile(r'w:(ascii|hAnsi)="(Symbol|Cambria Math|Wingdings\w*|MT Extra|Webdings)"')
 
+
+def rewrite_footnote_xml(xml: str) -> tuple[str, dict]:
+    """Normalize footnotes.xml text: every ordinary rFonts becomes Georgia,
+    explicit sizes are removed so the Footnote Text style's size applies, and
+    runs with no rFonts get one. Symbol fonts are left alone."""
     rewritten = 0
+
     def _rewrite_rfonts(m):
         nonlocal rewritten
+        if _KEEP_FONTS_RE.search(m.group(0)):
+            return m.group(0)
         rewritten += 1
         return '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/>'
     xml = re.sub(r"<w:rFonts\b[^/]*/>", _rewrite_rfonts, xml)
 
     stripped = 0
-    def _count_sub(pattern, s):
-        nonlocal stripped
-        s2, n = re.subn(pattern, "", s)
+    for pattern in (r"<w:sz\b[^/]*/>", r"<w:szCs\b[^/]*/>"):
+        xml, n = re.subn(pattern, "", xml)
         stripped += n
-        return s2
-    xml = _count_sub(r"<w:sz\b[^/]*/>", xml)
-    xml = _count_sub(r"<w:szCs\b[^/]*/>", xml)
 
     injected = 0
+
     def _inject_rfonts(m):
         nonlocal injected
         inner = m.group(1)
@@ -756,7 +764,16 @@ def fix_footnote_fonts(docx_path: Path) -> dict:
         injected += 1
         return f'<w:rPr>{inner}<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/></w:rPr>'
     xml = re.sub(r"<w:rPr>(.*?)</w:rPr>", _inject_rfonts, xml, flags=re.DOTALL)
+    return xml, {"rfonts_rewritten": rewritten, "rfonts_injected": injected, "sz_stripped": stripped}
 
+
+def fix_footnote_fonts(docx_path: Path) -> dict:
+    src = str(docx_path)
+    with zipfile.ZipFile(src, "r") as z:
+        if "word/footnotes.xml" not in z.namelist():
+            return {"rfonts_rewritten": 0, "rfonts_injected": 0, "sz_stripped": 0}
+        xml = z.read("word/footnotes.xml").decode("utf-8")
+    xml, stats = rewrite_footnote_xml(xml)
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".docx")
     os.close(tmp_fd)
     with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
@@ -766,7 +783,7 @@ def fix_footnote_fonts(docx_path: Path) -> dict:
                 data = xml.encode("utf-8")
             zout.writestr(item, data)
     shutil.move(tmp_path, src)
-    return {"rfonts_rewritten": rewritten, "rfonts_injected": injected, "sz_stripped": stripped}
+    return stats
 
 
 # ---------- main entry ----------
@@ -785,7 +802,6 @@ def run_fixup(docx_path: str) -> dict:
     list_n = clear_list_direct_spacing(doc)
     t_count = fix_content_tables(doc)
     masthead_ok = fix_masthead_grid(doc)
-    ref_stripped = strip_reference_run_formatting(doc)
     # Run AFTER reclassification so stripping applies to final-style paragraphs
     direct_strip = strip_direct_formatting(doc)
     cell_strip = normalize_table_cells(doc)
@@ -807,7 +823,6 @@ def run_fixup(docx_path: str) -> dict:
         "lists_cleared": list_n,
         "tables_centered": t_count,
         "masthead_ok": masthead_ok,
-        "references_stripped": ref_stripped,
         "direct_formatting": direct_strip,
         "table_cells_normalized": cell_strip,
         "footnotes": fn_stats,
