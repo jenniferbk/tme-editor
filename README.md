@@ -28,9 +28,7 @@ objects round-trip cleanly:
 - `template_build/` — `tme_template` package (cover, masthead, tagline,
   headers/footers, styles, OOXML helpers). Used by the app and by a CLI
   `build_template.py` that generates a reusable `.docx` template.
-- `moore_build/` — `moore_pipeline` package (EndNote citation resolution,
-  headshot framing) plus the article-specific one-off scripts used for the
-  Spring 2026 Moore article.
+- `moore_build/` — legacy one-off scripts for the Spring 2026 Moore article. Not used by the app (the EndNote resolver now lives in `tme_editor_app/src/endnote.py`).
 - `assets/` — the TME logo (landscape + portrait) used on covers.
 
 ## Run locally

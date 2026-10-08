@@ -1,7 +1,7 @@
 """Generalized article-starter builder: turns ArticleMeta + headshots into a
 formatted TME starter .docx with cover page + placeholder body section.
 
-This is the generalized version of moore_pipeline.moore_starter."""
+This generalizes the one-off starter script written for the Spring 2026 Moore article."""
 from pathlib import Path
 from typing import Dict, List, Tuple
 

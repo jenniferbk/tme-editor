@@ -1,4 +1,4 @@
-"""Parameterized version of moore_build/src/apply_tme_styles.py.
+"""Parameterized version of the legacy Moore article styling script.
 
 Applies TME paragraph styles to a populated article starter. Detects the body
 section by looking for the paragraph containing the Section 1→2 page break

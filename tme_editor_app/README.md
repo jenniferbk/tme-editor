@@ -12,7 +12,7 @@ A web tool for building formatted *The Mathematics Educator* articles from a sub
    - Resolves any unrendered EndNote citations in the manuscript.
    - Crops each headshot to a face-centered circle.
    - Generates a TME-formatted starter `.docx` with the cover page, masthead, and body placeholder.
-6. Download the starter. Open it in Word, paste the article body into the placeholder (Paste → **Keep Source Formatting**), run the companion styling script, export to PDF.
+6. Download the starter. Open it in Word, paste the article body into the placeholder (Paste → **Keep Source Formatting**), come back to the app's Phase 2, upload the pasted file, click **Finalize**, then export the proof to PDF.
 
 ## Running locally (for development or testing)
 
@@ -20,8 +20,7 @@ A web tool for building formatted *The Mathematics Educator* articles from a sub
 cd tme_editor_app
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e ../template_build -e ../moore_build
+pip install -r ../requirements.txt
 export GEMINI_API_KEY=<your-key>
 streamlit run app.py
 ```
@@ -78,12 +77,16 @@ tme_editor_app/
 ├── src/
 │   ├── extractor.py       # Gemini-based metadata extraction
 │   ├── article_starter.py # Generalized starter .docx builder
+│   ├── apply_styles.py    # Applies TME paragraph styles to the pasted article
+│   ├── classifier.py      # Classifies body paragraphs for styling
+│   ├── fixup.py           # Post-paste corrections
+│   ├── endnote.py         # EndNote citation resolver
+│   ├── session_meta.py    # Session metadata carried between phases
 │   └── pipeline.py        # Orchestrates endnote + headshots + starter
-├── requirements.txt
+├── tests/
 ├── Dockerfile
 └── README.md
 ```
 
-Depends on two sibling packages:
+The Python dependencies are listed in the repo-root `requirements.txt`. The app also depends on one sibling package:
 - `../template_build/` — the TME style + layout library (`tme_template` Python package)
-- `../moore_build/` — the EndNote resolver and headshot prep (`moore_pipeline` Python package)

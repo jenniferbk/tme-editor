@@ -27,7 +27,6 @@ _TME = _HERE.parent
 for p in (
     _HERE / 'src',
     _TME / 'template_build' / 'src',
-    _TME / 'moore_build' / 'src',
 ):
     sp = str(p)
     if sp not in sys.path:

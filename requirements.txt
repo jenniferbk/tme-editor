@@ -4,6 +4,5 @@ Pillow>=10.4
 opencv-python-headless>=4.10,<5  # 5.x dropped CascadeClassifier; see template_build/tests/test_headshot.py
 numpy>=1.26
 lxml>=5.2
-google-genai>=0.7
+google-genai>=1.0  # response_schema and thinking_config need the 1.x SDK
 -e ./template_build
--e ./moore_build

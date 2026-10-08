@@ -1,4 +1,4 @@
-"""Parameterized fixup battery — generalized from moore_build/src/fixup_moore.py.
+"""Parameterized fixup battery — generalized from the legacy Moore article fixup script.
 
 Applies the set of post-paste corrections that Word's "Keep Source Formatting"
 makes necessary:

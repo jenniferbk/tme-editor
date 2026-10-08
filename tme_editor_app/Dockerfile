@@ -7,12 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the two support packages (installed from local paths) and app
+# Copy the shared layout package, the app, the logo assets and the root
+# requirements (which installs template_build as an editable path).
+COPY requirements.txt /app/requirements.txt
 COPY template_build /app/template_build
-COPY moore_build /app/moore_build
 COPY tme_editor_app /app/tme_editor_app
+COPY assets /app/assets
 
-RUN pip install --no-cache-dir -r /app/tme_editor_app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 EXPOSE 8501
 CMD ["streamlit", "run", "/app/tme_editor_app/app.py", \

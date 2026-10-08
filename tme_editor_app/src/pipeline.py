@@ -1,12 +1,12 @@
 """End-to-end pipeline: manuscript + headshots + metadata → starter .docx.
-Reuses the existing moore_pipeline.endnote resolver and headshot framing."""
+Uses the app's own EndNote resolver (endnote.py) and headshot framing."""
 import shutil
 from pathlib import Path
 from typing import Dict
 
 from PIL import Image
 
-from moore_pipeline.endnote import resolve_endnote_citations
+from endnote import resolve_endnote_citations
 from tme_template.headshot import frame_headshot_square
 
 from article_starter import build_article_starter
