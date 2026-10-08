@@ -1,21 +1,21 @@
 """Research-article cover page layout: title, authors, abstract, author block."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Dict
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from tme_template.colors import LINE, META, UGA_RED
 from tme_template.oxml_helpers import apply_bottom_rule, remove_cell_borders, set_cell_margins
+from tme_template.runs import add_red_run
 
 
 @dataclass
 class AuthorEntry:
     name: str
     affiliation_num: int
-    role: Optional[str]
+    role: Optional[str]  # accepted for compatibility; the cover layout does not render it
     bio: str
     headshot_path: Optional[str]
     corresponding: bool = False
@@ -30,15 +30,6 @@ class CoverData:
     dates: Dict[str, str]  # ordered: Received, Revised, Accepted, Published
     abstract: str
     keywords: List[str]
-
-
-def _red_label(paragraph, text: str, size_pt: float = 9):
-    r = paragraph.add_run(text)
-    r.font.name = "Arial"
-    r.font.size = Pt(size_pt)
-    r.font.bold = True
-    r.font.color.rgb = RGBColor.from_string(UGA_RED)
-    return r
 
 
 def add_research_article_cover(doc, data: CoverData) -> None:
@@ -136,13 +127,17 @@ def add_research_article_cover(doc, data: CoverData) -> None:
     ab_lbl = doc.add_paragraph()
     ab_lbl.paragraph_format.space_before = Pt(0)
     ab_lbl.paragraph_format.space_after = Pt(4)
-    _red_label(ab_lbl, "ABOUT THE AUTHORS")
+    add_red_run(ab_lbl, "ABOUT THE AUTHORS", size_pt=9, bold=True)
 
-    # Author block — 3-column table (one cell per author)
+    # Author block — one cell per author
     n = len(data.authors)
     col_width = Inches(7.5 / n)
     tbl = doc.add_table(rows=1, cols=n)
-    tbl.style = "Table Grid"
+    tbl.autofit = False
+    for col in tbl.columns:
+        col.width = col_width
+        for cell in col.cells:
+            cell.width = col_width
 
     # Keep author row from breaking across pages
     row = tbl.rows[0]
@@ -154,15 +149,6 @@ def add_research_article_cover(doc, data: CoverData) -> None:
         cell = tbl.cell(0, col_idx)
         remove_cell_borders(cell)
         set_cell_margins(cell, top=0, bottom=0, left=80, right=80)
-        # Set cell width
-        tc = cell._tc
-        tcPr = tc.get_or_add_tcPr()
-        tcW = tcPr.find(qn("w:tcW"))
-        if tcW is None:
-            tcW = OxmlElement("w:tcW")
-            tcPr.append(tcW)
-        tcW.set(qn("w:w"), str(int(col_width.pt * 20)))  # twentieths of a point
-        tcW.set(qn("w:type"), "dxa")
 
         # Paragraph 1: headshot (centered)
         p_img = cell.paragraphs[0]
@@ -205,7 +191,7 @@ def add_research_article_cover(doc, data: CoverData) -> None:
     lbl = doc.add_paragraph()
     lbl.paragraph_format.space_before = Pt(0)
     lbl.paragraph_format.space_after = Pt(4)
-    _red_label(lbl, "ABSTRACT")
+    add_red_run(lbl, "ABSTRACT", size_pt=9, bold=True)
 
     # Abstract — explicit compact formatting (Georgia 10pt, 1.3 line spacing, justified)
     ab = doc.add_paragraph()

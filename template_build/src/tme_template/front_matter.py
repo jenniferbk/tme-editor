@@ -1,15 +1,15 @@
 """Front-matter page generators: issue cover, editorial staff, formal title page."""
 import io
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from docx.enum.table import WD_ROW_HEIGHT_RULE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from tme_template.colors import INK, META, UGA_RED
 from tme_template.oxml_helpers import apply_bottom_rule, remove_cell_borders, set_cell_shading
+from tme_template.runs import add_red_run
 
 
 @dataclass
@@ -48,15 +48,6 @@ def _open_image_as_rgb_stream(path: str) -> io.BytesIO:
     return buf
 
 
-def _red_run(p, text, *, size_pt=13, bold=True):
-    r = p.add_run(text)
-    r.font.name = "Arial"
-    r.font.size = Pt(size_pt)
-    r.font.bold = bold
-    r.font.color.rgb = RGBColor.from_string(UGA_RED)
-    return r
-
-
 def add_issue_cover_page(doc, issue: IssueInfo) -> None:
     """Portrait logo, vol/no in red caps, season/year in italic Georgia, credit at bottom.
 
@@ -68,16 +59,14 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
     table.autofit = False
     table.columns[0].width = Inches(6.5)
     cell = table.cell(0, 0)
+    cell.width = Inches(6.5)
     # No fill: issue cover uses white background (Word default) so the
     # portrait logo's white background doesn't clash with a cream fill.
     remove_cell_borders(cell)
 
-    # Set approximate page-fill height (~9" for 11" page with 1" top+bottom margins)
-    trPr = table.rows[0]._tr.get_or_add_trPr()
-    trHeight = OxmlElement("w:trHeight")
-    trHeight.set(qn("w:val"), str(int(Inches(9).pt * 20)))  # twips
-    trHeight.set(qn("w:hRule"), "atLeast")
-    trPr.append(trHeight)
+    row = table.rows[0]
+    row.height = Inches(9)   # fills the page at the 0.3" margins the template uses
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
 
     def _add_p():
         """Add a paragraph inside the cell (after the first existing paragraph)."""
@@ -100,7 +89,7 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
     p_vol = _add_p()
     p_vol.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_vol.paragraph_format.space_before = Pt(30)
-    _red_run(p_vol, f"VOLUME {issue.volume}  ·  NUMBER {issue.number}", size_pt=13)
+    add_red_run(p_vol, f"VOLUME {issue.volume}  ·  NUMBER {issue.number}", size_pt=13, bold=True)
 
     p_season = _add_p()
     p_season.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -134,29 +123,9 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
         r2.font.color.rgb = RGBColor.from_string(META)
 
 
-def _section_label(doc, text: str):
-    p = doc.add_paragraph()
-    _red_run(p, text, size_pt=11)
-    return p
-
-
-def _role_group(doc, role_label: str, names: List[str]):
-    p_role = doc.add_paragraph()
-    r = p_role.add_run(role_label)
-    r.font.name = "Georgia"
-    r.font.size = Pt(11)
-    r.font.italic = True
-    r.font.color.rgb = RGBColor.from_string(META)
-    for n in names:
-        p_n = doc.add_paragraph()
-        rn = p_n.add_run(n)
-        rn.font.name = "Georgia"
-        rn.font.size = Pt(12.5)
-
-
 def _section_label_in_cell(cell, text: str):
     p = cell.add_paragraph()
-    _red_run(p, text, size_pt=11)
+    add_red_run(p, text, size_pt=11, bold=True)
     return p
 
 
@@ -174,7 +143,7 @@ def _role_group_in_cell(cell, role_label: str, names: List[str]):
         rn.font.size = Pt(12.5)
 
 
-def add_editorial_staff_page(doc, issue: IssueInfo, roster: StaffRoster) -> None:
+def add_editorial_staff_page(doc, roster: StaffRoster) -> None:
     """Uses masthead + two-column table layout. Caller must add masthead + tagline first.
 
     Left column: EDITORIAL group. Right column: MESA OFFICERS group.
@@ -183,6 +152,8 @@ def add_editorial_staff_page(doc, issue: IssueInfo, roster: StaffRoster) -> None
     table.autofit = False
     table.columns[0].width = Inches(3.25)
     table.columns[1].width = Inches(3.25)
+    for cell in table.rows[0].cells:
+        cell.width = Inches(3.25)
     left_cell = table.cell(0, 0)
     right_cell = table.cell(0, 1)
     remove_cell_borders(left_cell)
@@ -244,7 +215,7 @@ def add_formal_title_page(doc, issue: IssueInfo) -> None:
 
     p_iss = doc.add_paragraph()
     p_iss.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _red_run(p_iss, f"VOLUME {issue.volume}  ·  NUMBER {issue.number}", size_pt=13)
+    add_red_run(p_iss, f"VOLUME {issue.volume}  ·  NUMBER {issue.number}", size_pt=13, bold=True)
 
     p_year = doc.add_paragraph()
     p_year.alignment = WD_ALIGN_PARAGRAPH.CENTER

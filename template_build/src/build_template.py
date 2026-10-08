@@ -74,7 +74,7 @@ def build() -> Path:
     ed_body_section.footer.is_linked_to_previous = False
     for p in list(ed_body_section.footer.paragraphs):
         p._p.getparent().remove(p._p)
-    add_editorial_staff_page(doc, issue, StaffRoster(
+    add_editorial_staff_page(doc, StaffRoster(
         editors=["Jennifer Kleiman", "[Co-Editor Name]"],
         associate_editors=["[Associate Editor]", "[Associate Editor]"],
         advisor="[Advisor]",

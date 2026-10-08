@@ -2,11 +2,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
 from tme_template.colors import BLACK, UGA_RED
+from tme_template.layout import BLEED_IN, MASTHEAD_LEFT_WIDTH, MASTHEAD_RIGHT_WIDTH, PAGE_WIDTH_IN
 from tme_template.oxml_helpers import (
     force_table_full_width,
     remove_cell_borders,
@@ -47,18 +48,19 @@ def _vol_line_text(d: MastheadData) -> str:
 def add_masthead(doc, data: MastheadData) -> None:
     """Append the masthead (2-col table) to a document body."""
     table = doc.add_table(rows=1, cols=2)
-    # Fixed widths: left 38%, right 62% of full 8.5" page width (zero margins).
-    # Word in Compatibility Mode renders zero-margin content slightly inside
-    # the page edge, leaving a visible gap. Extending the right column by a
-    # small bleed (~0.063") closes the gap. The logo column stays at 38%.
-    TOTAL_WIDTH = 8.5
-    BLEED_INCHES = 0.063
     table.autofit = False
-    table.columns[0].width = Inches(TOTAL_WIDTH * 0.38)                   # ~3.23"
-    table.columns[1].width = Inches(TOTAL_WIDTH * 0.62 + BLEED_INCHES)    # ~5.33"
-    table.rows[0].height = Pt(75)
+    # Widths go on both the grid (gridCol, which LibreOffice reads) and the
+    # cells (tcW, which Word reads); python-docx's column.width writes only
+    # the former. The bleed is explained in layout.py.
+    for col, width in zip(table.columns, (MASTHEAD_LEFT_WIDTH, MASTHEAD_RIGHT_WIDTH)):
+        col.width = width
+        for cell in col.cells:
+            cell.width = width
+    row = table.rows[0]
+    row.height = Pt(75)
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
 
-    force_table_full_width(table, total_width_inches=TOTAL_WIDTH + BLEED_INCHES)
+    force_table_full_width(table, total_width_inches=PAGE_WIDTH_IN + BLEED_IN)
 
     left, right = table.cell(0, 0), table.cell(0, 1)
     for c in (left, right):
@@ -97,5 +99,6 @@ def add_masthead(doc, data: MastheadData) -> None:
 
     _add_line(data.article_type, size_pt=11, bold=True)
     _add_line(_vol_line_text(data), size_pt=16, bold=True)
-    _add_line(data.doi or "", size_pt=10.5)
+    if data.doi:
+        _add_line(data.doi, size_pt=10.5)
     _add_line(f"ISSN\u00a0{data.issn_print}\u00a0(print)\u00a0\u00a0{data.issn_online}\u00a0(online)", size_pt=10)
