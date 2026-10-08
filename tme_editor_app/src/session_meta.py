@@ -1,16 +1,28 @@
 """Carry ArticleMeta inside the starter .docx so Phase 2 can recover it after
 the editor's browser session has expired (they leave for Word for hours).
 
-The JSON lives in the core-properties Comments field (dc:description), which
-Word preserves on save and which needs no custom XML part."""
+The JSON lives in a Word document variable (w:docVars/w:docVar in settings.xml).
+Word preserves document variables when it saves, a value may be up to 65,280
+characters, and unlike the core-properties Comments field there is no
+255-character cap."""
 import json
 from dataclasses import asdict, fields
 
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 from extractor import ArticleMeta, AuthorMeta
 
-MARKER = "TME-META-JSON:"
+DOCVAR_NAME = "TME_META_JSON"
+
+# Elements that follow w:docVars in the CT_Settings schema sequence.
+_DOCVARS_SUCCESSORS = (
+    "w:rsids", "m:mathPr", "w:attachedSchema", "w:themeFontLang", "w:clrSchemeMapping",
+    "w:doNotIncludeSubdocsInStats", "w:doNotAutoCompressPictures", "w:forceUpgrade",
+    "w:captions", "w:readModeInkLockDown", "w:smartTagType", "sl:schemaLibrary",
+    "w:shapeDefaults", "w:doNotEmbedSmartTags", "w:decimalSymbol", "w:listSeparator",
+)
 
 
 def meta_to_json(meta: ArticleMeta) -> str:
@@ -28,17 +40,37 @@ def meta_from_json(s: str) -> ArticleMeta:
     return ArticleMeta(**d)
 
 
+def _find_docvar(settings):
+    docvars = settings.find(qn("w:docVars"))
+    if docvars is None:
+        return None, None
+    for var in docvars.findall(qn("w:docVar")):
+        if var.get(qn("w:name")) == DOCVAR_NAME:
+            return docvars, var
+    return docvars, None
+
+
 def embed_meta(docx_path, meta: ArticleMeta) -> None:
     doc = Document(str(docx_path))
-    # python-docx's `comments` setter rejects values over 255 characters, and
-    # real abstracts and bios are far longer. The XML itself has no such limit,
-    # so write the dc:description element directly.
-    doc.core_properties._element._get_or_add("description").text = MARKER + meta_to_json(meta)
+    settings = doc.settings.element
+    docvars, var = _find_docvar(settings)
+    if docvars is None:
+        docvars = OxmlElement("w:docVars")
+        settings.insert_element_before(docvars, *_DOCVARS_SUCCESSORS)
+    if var is None:
+        var = OxmlElement("w:docVar")
+        var.set(qn("w:name"), DOCVAR_NAME)
+        docvars.append(var)
+    var.set(qn("w:val"), meta_to_json(meta))
     doc.save(str(docx_path))
 
 
 def read_meta(docx_path):
-    comments = Document(str(docx_path)).core_properties.comments or ""
-    if not comments.startswith(MARKER):
+    """Return the embedded ArticleMeta, or None when absent or unreadable."""
+    _, var = _find_docvar(Document(str(docx_path)).settings.element)
+    if var is None:
         return None
-    return meta_from_json(comments[len(MARKER):])
+    try:
+        return meta_from_json(var.get(qn("w:val")) or "")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return None
