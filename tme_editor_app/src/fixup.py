@@ -145,7 +145,9 @@ def remap_block_quotes(doc) -> int:
         li = p.paragraph_format.left_indent
         if li is None:
             continue
-        if li.pt > 20:
+        # APA defines a block quote as 40+ words; indented short lines are
+        # task parts, list continuations or equations.
+        if li.pt > 20 and len(p.text.split()) >= 40:
             p.style = bq_style
             p.paragraph_format.left_indent = None
             p.paragraph_format.first_line_indent = None
@@ -521,30 +523,27 @@ def swap_captions_above(doc, report: list) -> int:
     followed by more paragraphs in the same style, they are moved as a
     group so the continuation stays with the head.
 
-    Indices in the report are interpreted against the CURRENT document state,
-    so callers should pass a freshly-generated report (do not cache across
-    swaps). Returns the number of caption GROUPS actually moved.
+    Entries are resolved by `index` against the document as it was when the
+    report was generated. Processing from the highest index down keeps the
+    lower indices valid, because a move only reorders elements between the
+    caption and its figure or table. Returns the number of caption GROUPS
+    actually moved.
     """
     moved = 0
     tag_p, tag_tbl = qn("w:p"), qn("w:tbl")
-    for entry in report:
-        # Re-resolve the caption paragraph each iteration since previous swaps
-        # change paragraph indices. Match by the preview text to stay robust.
-        preview = entry.get("preview", "")
+    paras = list(doc.paragraphs)
+    # Reported caption heads. A head moved earlier in this pass can land right
+    # after another caption of the same style; it must not be absorbed as that
+    # caption's continuation paragraph.
+    head_els = {paras[e["index"]]._p for e in report if e["index"] < len(paras)}
+    for entry in sorted(report, key=lambda e: e["index"], reverse=True):
         kind = entry["kind"]
-        target_p = None
-        for p in doc.paragraphs:
-            if p.style is None:
-                continue
-            sn = p.style.name
-            if kind == "figure" and sn != "TME Figure Caption":
-                continue
-            if kind == "table" and sn != "TME Table Caption":
-                continue
-            if p.text.strip().startswith(preview.strip()):
-                target_p = p
-                break
-        if target_p is None:
+        idx = entry["index"]
+        if idx >= len(paras):
+            continue
+        target_p = paras[idx]
+        sn = target_p.style.name if target_p.style is not None else ""
+        if (kind == "figure" and sn != "TME Figure Caption") or (kind == "table" and sn != "TME Table Caption"):
             continue
 
         first_cap_el = target_p._p
@@ -558,7 +557,7 @@ def swap_captions_above(doc, report: list) -> int:
 
         caption_els = [first_cap_el]
         cursor = first_cap_el.getnext()
-        while cursor is not None and cursor.tag == tag_p:
+        while cursor is not None and cursor.tag == tag_p and cursor not in head_els:
             pPr = cursor.find(qn("w:pPr"))
             pStyle = pPr.find(qn("w:pStyle")) if pPr is not None else None
             style_id = pStyle.get(qn("w:val")) if pStyle is not None else None
@@ -585,7 +584,7 @@ def swap_captions_above(doc, report: list) -> int:
             prev = prev.getprevious()
         if prev is None:
             continue
-        if kind == "figure" and prev.tag != tag_p:
+        if kind == "figure" and (prev.tag != tag_p or not _has_image(prev)):
             continue
         if kind == "table" and prev.tag != tag_tbl:
             continue
@@ -674,7 +673,12 @@ def fix_content_tables(doc, skip_indices=None) -> int:
         rows = table._tbl.findall(qn("w:tr"))
         for tr in rows:
             _set_trPr_flag(tr, "cantSplit")
-        if rows:
+        # Repeat the first row on page breaks only when it reads as a header:
+        # two or more rows and text in every first-row cell. Layout tables
+        # (images in cells) and one-row tables are left alone.
+        first_cells = rows[0].findall(qn("w:tc")) if rows else []
+        if len(rows) >= 2 and first_cells and all(
+                "".join(t.text or "" for t in tc.iter(qn("w:t"))).strip() for tc in first_cells):
             _set_trPr_flag(rows[0], "tblHeader")
         n += 1
     return n
