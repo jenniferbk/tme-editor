@@ -4,6 +4,7 @@ figure images."""
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 import fixup
 from tme_template.styles import (
@@ -21,10 +22,18 @@ def _make_doc_with_styles():
     return doc
 
 
-def _add_drawing_paragraph(doc, style="TME Body"):
+def _add_drawing_paragraph(doc, style="TME Body", anchored=False):
+    """Image-only paragraph. Inline by default (wp:inline); anchored=True makes
+    a floating picture (wp:anchor), whose paragraph alignment means nothing."""
     p = doc.add_paragraph("", style=style)
-    p.add_run()._r.append(OxmlElement("w:drawing"))
+    drawing = OxmlElement("w:drawing")
+    drawing.append(OxmlElement("wp:anchor" if anchored else "wp:inline"))
+    p.add_run()._r.append(drawing)
     return p
+
+
+def _add_table_after(doc):
+    return doc.add_table(rows=1, cols=1)
 
 
 def _texts(doc):
@@ -132,7 +141,109 @@ def test_empty_spacer_between_label_and_title_is_removed():
     assert _texts(doc) == ["Figure 6. Packages Task", ""]
 
 
+def test_table_label_followed_by_a_table_does_not_eat_the_note_below_it():
+    doc = _make_doc_with_styles()
+    label = doc.add_paragraph("Table 1", style="TME Body")
+    _add_table_after(doc)
+    note = doc.add_paragraph("Note. Values are means.", style="TME Body")
+
+    stats = fixup.merge_split_captions(doc)
+
+    assert stats == {"labels_restyled": 1, "titles_merged": 0}
+    assert label.style.name == "TME Table Caption"
+    assert _texts(doc) == ["Table 1", "Note. Values are means."]
+    assert note.style.name == "TME Body"
+
+
+def test_title_set_entirely_in_run_italics_comes_out_plain():
+    """APA 7 titles are italic as a whole; that is style, not emphasis."""
+    doc = _make_doc_with_styles()
+    doc.add_paragraph("Figure 1", style="TME Body")
+    title = doc.add_paragraph(style="TME Body")
+    title.add_run("UTG for the ").italic = True
+    title.add_run("Cake Task").italic = True
+    _add_drawing_paragraph(doc)
+
+    fixup.merge_split_captions(doc)
+
+    merged = doc.paragraphs[0]
+    assert merged.text == "Figure 1. UTG for the Cake Task"
+    assert not any(r.italic for r in merged.runs)
+
+
+def test_trailing_blank_run_on_label_does_not_leave_a_space_before_the_period():
+    doc = _make_doc_with_styles()
+    label = doc.add_paragraph(style="TME Body")
+    label.add_run("Figure ")
+    label.add_run("1")
+    label.add_run(" ")
+    doc.add_paragraph("Cake Task", style="TME Body")
+
+    fixup.merge_split_captions(doc)
+
+    assert _texts(doc) == ["Figure 1. Cake Task"]
+
+
+def test_page_break_paragraph_between_label_and_title_is_kept():
+    doc = _make_doc_with_styles()
+    doc.add_paragraph("Figure 2", style="TME Body")
+    brk = doc.add_paragraph(style="TME Body")
+    brk.add_run().add_break(__import__("docx.enum.text", fromlist=["WD_BREAK"]).WD_BREAK.PAGE)
+    doc.add_paragraph("Title after break", style="TME Body")
+
+    stats = fixup.merge_split_captions(doc)
+
+    assert stats == {"labels_restyled": 1, "titles_merged": 0}
+    assert len(doc.paragraphs) == 3
+    assert brk._p.find(".//" + qn("w:br")) is not None
+
+
+def test_section_break_paragraph_between_label_and_title_is_kept():
+    doc = _make_doc_with_styles()
+    doc.add_paragraph("Figure 2", style="TME Body")
+    sect = doc.add_paragraph(style="TME Body")
+    sect._p.get_or_add_pPr().append(OxmlElement("w:sectPr"))
+    doc.add_paragraph("Title after break", style="TME Body")
+
+    fixup.merge_split_captions(doc)
+
+    assert len(doc.paragraphs) == 3
+    assert sect._p.pPr.find(qn("w:sectPr")) is not None
+
+
+def test_unnumbered_label_is_not_folded_into_a_previous_label():
+    """Two SEQ labels with uncached results read as bare 'Figure' lines."""
+    doc = _make_doc_with_styles()
+    doc.add_paragraph("Figure", style="TME Body")
+    doc.add_paragraph("Figure", style="TME Body")
+    _add_drawing_paragraph(doc)
+
+    stats = fixup.merge_split_captions(doc)
+
+    assert stats["titles_merged"] == 0
+    assert _texts(doc) == ["Figure", "Figure", ""]
+
+
 # ---- center_image_paragraphs ----
+
+def test_anchored_floating_image_is_not_centered_or_counted():
+    doc = _make_doc_with_styles()
+    img = _add_drawing_paragraph(doc, anchored=True)
+    assert fixup.center_image_paragraphs(doc) == 0
+    assert img.alignment is None
+
+
+def test_images_before_the_body_section_break_are_left_alone():
+    doc = _make_doc_with_styles()
+    cover_img = _add_drawing_paragraph(doc)
+    brk = doc.add_paragraph(style="TME Body")
+    brk._p.get_or_add_pPr().append(OxmlElement("w:sectPr"))
+    body_img = _add_drawing_paragraph(doc)
+
+    assert fixup.center_image_paragraphs(doc) == 1
+    assert cover_img.alignment is None
+    assert body_img.alignment == WD_ALIGN_PARAGRAPH.CENTER
+
 
 def test_image_only_paragraph_is_centered_whatever_its_style():
     doc = _make_doc_with_styles()

@@ -30,7 +30,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
+from docx.text.paragraph import Paragraph
 
+from apply_styles import find_body_start_index
 from tme_template.colors import BLOCKQUOTE_INK
 
 
@@ -193,10 +195,14 @@ _LABEL_START_PAT = re.compile(r"^(Figure|Table)\s*[A-Z]?\d", re.I)
 _HEADING_STYLES = {"TME H1", "TME H2", "TME H3"}
 
 
-def _para_text_with_fields(p) -> str:
+def _el_text(p_el) -> str:
     """Paragraph text including field results (SEQ caption numbers live inside
     w:fldSimple, which Paragraph.text skips)."""
-    return "".join(t.text or "" for t in p._p.iter(qn("w:t")))
+    return "".join(t.text or "" for t in p_el.iter(qn("w:t")))
+
+
+def _para_text_with_fields(p) -> str:
+    return _el_text(p._p)
 
 
 def _has_image(p_el) -> bool:
@@ -204,26 +210,49 @@ def _has_image(p_el) -> bool:
             or p_el.find(".//" + qn("w:pict")) is not None)
 
 
+def _has_inline_image(p_el) -> bool:
+    """An image that flows with the paragraph, so paragraph alignment moves it.
+    Floating pictures (wp:anchor) are positioned independently."""
+    return (p_el.find(".//" + qn("wp:inline")) is not None
+            or p_el.find(".//" + qn("w:pict")) is not None)
+
+
+def _is_spacer(p_el) -> bool:
+    """An empty paragraph that only separates things: no text, image, break,
+    or section properties. Safe to delete when closing up a split caption."""
+    return (not _el_text(p_el).strip()
+            and not _has_image(p_el)
+            and p_el.find(".//" + qn("w:br")) is None
+            and p_el.find(f"{qn('w:pPr')}/{qn('w:sectPr')}") is None)
+
+
 def _body_paragraphs(doc) -> list:
-    """Paragraphs after the last paragraph-embedded section break: the article
-    body in our starter structure (the cover sections precede it). With no
+    """Paragraphs of the article body: everything after the last
+    paragraph-embedded section break (the cover sections precede it). With no
     embedded break (plain test documents) every paragraph counts."""
     paras = list(doc.paragraphs)
-    last = None
-    for i, p in enumerate(paras):
-        pPr = p._p.find(qn("w:pPr"))
-        if pPr is not None and pPr.find(qn("w:sectPr")) is not None:
-            last = i
-    return paras if last is None else paras[last + 1:]
+    start = find_body_start_index(paras)
+    return paras if start is None else paras[start:]
 
 
 def _fold_title_into_label(label_p, title_p) -> None:
-    """Append title_p's content to label_p as "<label>. <title>", keeping the
-    title's run formatting (inline italics etc.). Caller removes title_p."""
-    texts = [t for t in label_p._p.iter(qn("w:t")) if (t.text or "").strip()]
+    """Append title_p's content to label_p as "<label>. <title>". Caller
+    removes title_p.
+
+    Inline emphasis in the title (an italic variable name) is kept, but a
+    title set italic as a whole is APA 7 styling, not emphasis, so that
+    italic is dropped and the TME caption style decides the look."""
+    texts = list(label_p._p.iter(qn("w:t")))
+    while texts and not (texts[-1].text or "").strip():
+        texts.pop().text = ""
     if texts:
         texts[-1].text = texts[-1].text.rstrip().rstrip(".:")
     label_p.add_run(". ")
+
+    title_runs = [r for r in title_p.runs if r.text.strip()]
+    if title_runs and all(r.italic for r in title_runs):
+        for r in title_p.runs:
+            r.italic = None
     for child in list(title_p._p):
         if child.tag != qn("w:pPr"):
             label_p._p.append(child)
@@ -234,55 +263,61 @@ def merge_split_captions(doc) -> dict:
     separate lines; TME uses one line ("Figure 1. Title").
 
     Every label-only paragraph is restyled to the matching TME caption style
-    (whatever source style it pasted in with). When the next non-empty
-    paragraph is a short text line that is not itself a caption or heading,
-    it is folded into the label as the title and removed, along with any
-    empty spacer paragraphs between them."""
+    (whatever source style it pasted in with). When the next body element,
+    skipping empty spacer paragraphs, is a short text paragraph that is not
+    itself a caption or heading, it is folded into the label as the title and
+    removed along with the spacers. A table, section break, image, or heading
+    following the label means the label stands alone."""
     fc = doc.styles["TME Figure Caption"]
     tc = doc.styles["TME Table Caption"]
     stats = {"labels_restyled": 0, "titles_merged": 0}
-    paras = list(doc.paragraphs)
-    i = 0
-    while i < len(paras):
-        label_p = paras[i]
-        m = _LABEL_ONLY_PAT.match(_para_text_with_fields(label_p).strip())
-        if not m or _has_image(label_p._p):
-            i += 1
+    tag_p = qn("w:p")
+    removed = set()
+    for label_p in list(doc.paragraphs):
+        el = label_p._p
+        if el in removed:
+            continue
+        m = _LABEL_ONLY_PAT.match(_el_text(el).strip())
+        if not m or _has_image(el):
             continue
         label_p.style = fc if m.group(1).lower() == "figure" else tc
         stats["labels_restyled"] += 1
 
-        j = i + 1
-        while (j < len(paras) and not _has_image(paras[j]._p)
-               and not _para_text_with_fields(paras[j]).strip()):
-            j += 1
-        if j < len(paras):
-            cand = paras[j]
-            ctext = _para_text_with_fields(cand).strip()
-            csn = cand.style.name if cand.style is not None else ""
-            looks_like_title = (
-                ctext and len(ctext) <= 400
-                and not _has_image(cand._p)
-                and not _LABEL_START_PAT.match(ctext)
-                and csn not in _HEADING_STYLES
-            )
-            if looks_like_title:
-                _fold_title_into_label(label_p, cand)
-                for k in range(i + 1, j + 1):
-                    paras[k]._p.getparent().remove(paras[k]._p)
-                stats["titles_merged"] += 1
-                paras = list(doc.paragraphs)
-        i += 1
+        spacers = []
+        nxt = el.getnext()
+        while nxt is not None and nxt.tag == tag_p and _is_spacer(nxt):
+            spacers.append(nxt)
+            nxt = nxt.getnext()
+        if nxt is None or nxt.tag != tag_p:
+            continue  # table, end of section, or end of body
+        cand = Paragraph(nxt, label_p._parent)
+        ctext = _el_text(nxt).strip()
+        csn = cand.style.name if cand.style is not None else ""
+        looks_like_title = (
+            ctext and len(ctext) <= 400
+            and not _has_image(nxt)
+            and not _LABEL_ONLY_PAT.match(ctext)
+            and not _LABEL_START_PAT.match(ctext)
+            and csn not in _HEADING_STYLES
+        )
+        if not looks_like_title:
+            continue
+        _fold_title_into_label(label_p, cand)
+        for gone in spacers + [nxt]:
+            gone.getparent().remove(gone)
+            removed.add(gone)
+        stats["titles_merged"] += 1
     return stats
 
 
 def center_image_paragraphs(doc) -> int:
-    """Center body paragraphs that hold only an image, so figures sit centered
-    under their captions regardless of the paragraph style they pasted in
-    with. Paragraphs with text (inline images) are left alone."""
+    """Center body paragraphs that hold only an inline image, so figures sit
+    centered under their captions regardless of the paragraph style they
+    pasted in with. Paragraphs with text, and floating (anchored) pictures
+    that alignment cannot move, are left alone."""
     n = 0
     for p in _body_paragraphs(doc):
-        if not _has_image(p._p) or _para_text_with_fields(p).strip():
+        if not _has_inline_image(p._p) or _para_text_with_fields(p).strip():
             continue
         if p.alignment != WD_ALIGN_PARAGRAPH.CENTER:
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER

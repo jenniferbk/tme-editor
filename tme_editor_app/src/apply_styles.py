@@ -30,7 +30,7 @@ def _first_nonempty_run(p):
     return None
 
 
-def _find_body_start_index(paragraphs) -> Optional[int]:
+def find_body_start_index(paragraphs) -> Optional[int]:
     """The body section is the LAST section in our starter structure. Its
     content begins immediately after the last paragraph-embedded sectPr.
     (The very last section's sectPr lives outside any paragraph at the body
@@ -167,7 +167,7 @@ def apply_styles(docx_path: str, meta) -> dict:
     doc = Document(docx_path)
     paragraphs = list(doc.paragraphs)
 
-    body_start = _find_body_start_index(paragraphs)
+    body_start = find_body_start_index(paragraphs)
     if body_start is None:
         # Fallback: start from the paragraph after the last TME Title paragraph.
         last_title_idx = None

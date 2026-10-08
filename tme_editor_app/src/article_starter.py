@@ -43,10 +43,9 @@ def _format_citation(meta) -> List[Tuple[str, bool]]:
             last = a.name.rsplit(" ", 1)[-1]
             initials = " ".join(n[0] + "." for n in a.name.split(" ")[:-1] if n)
             parts.append(f"{last}, {initials}".strip(", "))
+        # APA 7 reference form: comma before the ampersand even with two authors.
         if len(parts) == 1:
             authors = parts[0]
-        elif len(parts) == 2:
-            authors = " & ".join(parts)
         else:
             authors = ", ".join(parts[:-1]) + f", & {parts[-1]}"
     title_short = meta.title if len(meta.title) < 120 else meta.title[:117] + "..."
@@ -55,7 +54,7 @@ def _format_citation(meta) -> List[Tuple[str, bool]]:
         ("The Mathematics Educator", True),
         (", ", False),
         (str(meta.volume), True),
-        (f"({meta.number}), {meta.pages.replace('–', '–')}.", False),
+        (f"({meta.number}), {meta.pages.replace('-', '–')}.", False),  # hyphen → en dash
     ]
 
 
