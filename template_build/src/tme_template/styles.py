@@ -1,16 +1,25 @@
 """Register TME paragraph and character styles into a Document."""
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
 from docx.shared import Pt, Emu, RGBColor
 
 from tme_template.colors import BLOCKQUOTE_INK, INK, TEXT_MUTED
 
 
 def _get_or_add_paragraph_style(doc, name: str):
-    """Return existing style by name, or add a new paragraph style."""
-    if name in [s.name for s in doc.styles]:
-        return doc.styles[name]
-    return doc.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+    """Return the style by name (adding a paragraph style if absent) and make
+    sure it shows in Word's Styles gallery."""
+    style = doc.styles[name] if name in doc.styles else doc.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+    style.quick_style = True
+    return style
+
+
+def _set_outline_level(style, level: int) -> None:
+    """Outline level makes Word's Navigation pane, TOC generation and PDF
+    bookmarks see the heading; without it the document reads as flat."""
+    el = style.element.get_or_add_pPr().get_or_add_outlineLvl()
+    el.set(qn("w:val"), str(level))
 
 
 def register_body_style(doc) -> None:
@@ -39,8 +48,7 @@ def register_title_style(doc) -> None:
 
 
 def register_heading_styles(doc) -> None:
-    """H1 has a red left rule applied at paragraph level via left border;
-    see note in apply_red_left_rule helper (added in Task 7)."""
+    """H1–H3: Georgia, bold, tight spacing, kept with the next paragraph."""
     h1 = _get_or_add_paragraph_style(doc, "TME H1")
     h1.font.name = "Georgia"
     h1.font.size = Pt(16)
@@ -48,9 +56,9 @@ def register_heading_styles(doc) -> None:
     h1.font.color.rgb = RGBColor.from_string(INK)
     h1.paragraph_format.space_before = Pt(18)
     h1.paragraph_format.space_after = Pt(10)
-    h1.paragraph_format.left_indent = Pt(10)
     h1.paragraph_format.keep_with_next = True
     h1.paragraph_format.keep_together = True
+    _set_outline_level(h1, 0)
 
     h2 = _get_or_add_paragraph_style(doc, "TME H2")
     h2.font.name = "Georgia"
@@ -62,6 +70,7 @@ def register_heading_styles(doc) -> None:
     h2.paragraph_format.space_after = Pt(6)
     h2.paragraph_format.keep_with_next = True
     h2.paragraph_format.keep_together = True
+    _set_outline_level(h2, 1)
 
     h3 = _get_or_add_paragraph_style(doc, "TME H3")
     h3.font.name = "Georgia"
@@ -73,6 +82,7 @@ def register_heading_styles(doc) -> None:
     h3.paragraph_format.space_after = Pt(4)
     h3.paragraph_format.keep_with_next = True
     h3.paragraph_format.keep_together = True
+    _set_outline_level(h3, 2)
 
 
 def register_remaining_styles(doc) -> None:
@@ -124,7 +134,6 @@ def register_remaining_styles(doc) -> None:
     pq.paragraph_format.line_spacing = 1.5
     pq.paragraph_format.space_before = Pt(22)
     pq.paragraph_format.space_after = Pt(22)
-    # Horizontal rules above/below applied at element time — see oxml_helpers.
 
     bq = _get_or_add_paragraph_style(doc, "TME Block Quote")
     bq.font.name = "Georgia"
@@ -135,6 +144,15 @@ def register_remaining_styles(doc) -> None:
     bq.paragraph_format.line_spacing = 1.0
     bq.paragraph_format.space_before = Pt(8)
     bq.paragraph_format.space_after = Pt(8)
+
+    # Content-table cells. The editor app assigns this to every paragraph in a
+    # pasted table so cells render in Georgia instead of the theme font.
+    tt = _get_or_add_paragraph_style(doc, "TME Table Text")
+    tt.font.name = "Georgia"
+    tt.font.size = Pt(10)
+    tt.paragraph_format.line_spacing = 1.0
+    tt.paragraph_format.space_before = Pt(0)
+    tt.paragraph_format.space_after = Pt(2)
 
     # Word auto-creates "List Paragraph" when a list is pasted in. Pre-register
     # it so our body settings win over Word's defaults (which include 2.0 line
