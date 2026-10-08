@@ -594,6 +594,13 @@ def normalize_table_cells(doc, skip_indices=(0, 1)) -> int:
             for cell in row.cells:
                 for p in cell.paragraphs:
                     p.style = tt
+                    # Direct spacing/indent would override the style. Keep w:jc:
+                    # right-aligned numbers and centered headers carry meaning.
+                    pPr = p._p.find(qn("w:pPr"))
+                    if pPr is not None:
+                        for tag in _PPR_STRIP_TAGS:
+                            for el in pPr.findall(qn(tag)):
+                                pPr.remove(el)
                     for r in _iter_runs(p):
                         rPr = r._r.find(qn("w:rPr"))
                         if rPr is None:

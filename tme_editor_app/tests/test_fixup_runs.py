@@ -85,3 +85,23 @@ def test_footnote_rewrite_keeps_symbol_fonts():
     assert 'w:ascii="Georgia"' in out
     assert 'w:ascii="Symbol"' in out and 'w:ascii="Cambria Math"' in out
     assert stats["rfonts_rewritten"] == 1 and stats["sz_stripped"] == 1
+
+
+def test_cell_paragraph_direct_spacing_and_indent_stripped_but_alignment_kept():
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
+    doc = _doc()
+    t = doc.add_table(rows=1, cols=1)
+    cell_p = t.cell(0, 0).paragraphs[0]
+    cell_p.add_run("1.5")
+    cell_p.paragraph_format.space_after = Pt(18)
+    cell_p.paragraph_format.left_indent = Pt(20)
+    cell_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    fixup.update_styles(doc)
+    fixup.normalize_table_cells(doc, skip_indices=())
+
+    pPr = cell_p._p.pPr
+    assert pPr.find(qn("w:spacing")) is None
+    assert pPr.find(qn("w:ind")) is None
+    assert pPr.find(qn("w:jc")).get(qn("w:val")) == "right"
