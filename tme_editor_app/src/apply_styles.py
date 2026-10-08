@@ -59,9 +59,18 @@ def find_body_start_index(paragraphs) -> Optional[int]:
     return breaks[k] + 1
 
 
-# "Received: March 3, 2026", "Accepted 12 May 2026", "Published online June 2026"
+# "Received: March 3, 2026", "Accepted 12 May 2026", "Published online June 2026",
+# "Received: 2026-03-03", "Revised 3/3/2026". The keyword alone is not enough:
+# "Published in 2019, Smith found..." is a body sentence.
+_MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
 _DATE_LINE = re.compile(
-    r"^(received|revised|accepted|published)\b[^\d]{0,20}\d", re.I)
+    rf"^(?:received|revised|accepted|published)\b(?:\s+online)?\s*[:\-–—]?\s*"
+    rf"(?:(?:\d{{1,2}}\s+)?{_MONTH}\s+\d{{1,2}},?\s*\d{{0,4}}"
+    rf"|{_MONTH}\s+\d{{4}}"
+    rf"|\d{{4}}-\d{{2}}-\d{{2}}"
+    rf"|\d{{1,2}}/\d{{1,2}}/\d{{2,4}})",
+    re.I,
+)
 
 
 def _similar(a: str, b: str) -> float:

@@ -26,6 +26,9 @@ def test_real_body_openers_survive():
     assert not _dup("Published research on u-substitution has largely focused on procedures.")
     assert not _dup("Department of Mathematics faculty participated in the study.")
     assert not _dup("Accepted practice in calculus instruction emphasizes procedures.")
+    assert not _dup("Published in 2019, Smith found X.")
+    assert not _dup("Published research from 2019 shows a gap.")
+    assert not _dup("Revised version 2 of the task was harder.")
 
 
 def test_genuine_cover_duplicates_are_caught():
@@ -35,6 +38,9 @@ def test_genuine_cover_duplicates_are_caught():
     assert _dup("Keywords: calculus, quantitative reasoning")
     assert _dup("Received: March 3, 2026")
     assert _dup("Accepted 12 May 2026")
+    assert _dup("Published online June 2026")
+    assert _dup("Received: 2026-03-03")
+    assert _dup("Revised 3/3/2026")
     assert _dup(META.abstract)
     assert _dup("Kevin C. Moore")
     assert _dup(META.affiliations[0])
