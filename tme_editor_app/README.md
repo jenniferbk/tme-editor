@@ -17,12 +17,12 @@ A web tool for building formatted *The Mathematics Educator* articles from a sub
 ## Running locally (for development or testing)
 
 ```bash
-cd tme_editor_app
+# from the repo root (pip resolves ./template_build against this directory)
 python -m venv .venv
 source .venv/bin/activate
-pip install -r ../requirements.txt
+pip install -r requirements.txt
 export GEMINI_API_KEY=<your-key>
-streamlit run app.py
+streamlit run tme_editor_app/app.py
 ```
 
 Open http://localhost:8501 in your browser.

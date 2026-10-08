@@ -53,7 +53,7 @@ st.caption(
 _DEFAULTS = {
     "meta": None,
     "manuscript_path": None,
-    "manuscript_sig": None,     # (name, size) of the upload we saved
+    "manuscript_sig": None,     # file_id of the upload we saved
     "starter_bytes": None,
     "proof_bytes": None,
     "proof_filename": None,
@@ -65,10 +65,18 @@ if "work_dir" not in st.session_state:
     st.session_state.work_dir = Path(tempfile.mkdtemp(prefix="tme_editor_"))
 
 
+st.session_state.setdefault("uploader_epoch", 0)
+
+
 def _reset_session():
-    shutil.rmtree(st.session_state.work_dir, ignore_errors=True)
+    epoch = st.session_state.get("uploader_epoch", 0)
+    work_dir = st.session_state.work_dir
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    # Uploader widgets keep their files in browser state; a new key makes
+    # Streamlit build fresh, empty uploaders.
+    st.session_state["uploader_epoch"] = epoch + 1
+    shutil.rmtree(work_dir, ignore_errors=True)
     st.rerun()
 
 
@@ -99,9 +107,9 @@ with st.sidebar:
 st.header("Phase 1 — Cover build")
 
 st.subheader("1. Upload manuscript")
-ms = st.file_uploader("Submitted manuscript (.docx)", type=['docx'], key='ms_upload')
+ms = st.file_uploader("Submitted manuscript (.docx)", type=['docx'], key=f"ms_upload_{st.session_state.uploader_epoch}")
 if ms is not None:
-    sig = (ms.name, ms.size)
+    sig = ms.file_id
     if sig != st.session_state.manuscript_sig:
         st.session_state.manuscript_path = _save_upload(ms, "manuscript", "manuscript.docx")
         st.session_state.manuscript_sig = sig
@@ -160,7 +168,7 @@ if st.session_state.meta is not None:
 
     st.subheader("3. Upload headshots & match authors")
     uploads = st.file_uploader(
-        "Headshot image files", type=HEADSHOT_TYPES, accept_multiple_files=True, key='headshots',
+        "Headshot image files", type=HEADSHOT_TYPES, accept_multiple_files=True, key=f"headshots_{st.session_state.uploader_epoch}",
     )
     choices = {}   # upload index → author name
     if uploads:
@@ -233,7 +241,7 @@ with st.expander("📋 Word paste instructions (read first)", expanded=False):
     """)
 
 populated = st.file_uploader(
-    "Upload your populated starter (after pasting body in Word)", type=['docx'], key='populated_upload',
+    "Upload your populated starter (after pasting body in Word)", type=['docx'], key=f"populated_upload_{st.session_state.uploader_epoch}",
 )
 
 if populated is not None:
