@@ -1,4 +1,6 @@
 """Assert the deliberate 5-step grayscale palette is present with correct values."""
+import re
+
 from tme_template import colors
 
 
@@ -20,3 +22,10 @@ def test_palette_accents_defined():
 def test_removed_constants_are_gone():
     assert not hasattr(colors, "TAGLINE_GRAY")
     assert not hasattr(colors, "RULE_GRAY")
+
+
+def test_palette_values_are_six_hex_digits():
+    names = [n for n in dir(colors) if n.isupper()]
+    assert names
+    for n in names:
+        assert re.fullmatch(r"[0-9A-Fa-f]{6}", getattr(colors, n)), n

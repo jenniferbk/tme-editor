@@ -1,5 +1,6 @@
 """Assert the body running footer is just a centered page number."""
 from docx import Document
+from docx.oxml.ns import qn
 
 from tme_template.headers_footers import set_running_footer
 
@@ -12,9 +13,9 @@ def _footer_text(section):
 
 
 def _footer_has_page_field(section):
-    """Search the footer XML for a PAGE field instruction."""
-    xml = section.footer._element.xml
-    return 'PAGE' in xml and 'w:fldChar' in xml
+    """The footer must carry a real PAGE field instruction, not the letters."""
+    instr = section.footer._element.findall(".//" + qn("w:instrText"))
+    return any((i.text or "").strip() == "PAGE" for i in instr)
 
 
 def test_footer_has_no_copyright_text():
