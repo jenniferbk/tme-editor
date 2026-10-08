@@ -9,6 +9,7 @@ the remaining paragraphs into TME Body / TME H1 / TME Figure Caption / etc.
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from typing import List, Optional
 
 from docx import Document
@@ -58,48 +59,43 @@ def find_body_start_index(paragraphs) -> Optional[int]:
     return breaks[k] + 1
 
 
+# "Received: March 3, 2026", "Accepted 12 May 2026", "Published online June 2026"
+_DATE_LINE = re.compile(
+    r"^(received|revised|accepted|published)\b[^\d]{0,20}\d", re.I)
+
+
+def _similar(a: str, b: str) -> float:
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
 def _looks_like_cover_duplicate(text: str, meta) -> bool:
-    """True if a pasted paragraph seems to duplicate cover content the app
-    already rendered (title, abstract opener, author names, dates, keywords,
-    affiliations). Called only on paragraphs at the *top* of the body section.
-    """
+    """True if a paragraph at the top of the pasted body duplicates cover
+    content the starter already renders. Matches are near-equalities or
+    whole-string containment, never prefixes: a heading that happens to be a
+    phrase of the title, or a sentence that opens with 'Published', is body."""
     t = text.strip()
     if not t:
         return False
     tl = t.lower()
-    title_l = (meta.title or "").strip().lower()
-    if title_l and (title_l in tl or tl in title_l or tl.startswith(title_l[:40])):
+    title = (meta.title or "").strip()
+    if title and (_similar(t, title) >= 0.85 or (title.lower() in tl and len(t) <= len(title) + 40)):
         return True
-    # Abstract content: match if the paragraph starts with same first ~40 chars
-    abs_opener = (meta.abstract or "").strip()[:40].lower()
-    if abs_opener and abs_opener in tl:
+    abstract = (meta.abstract or "").strip()
+    if abstract and len(t) >= 40 and _similar(t[:160], abstract[:160]) >= 0.85:
         return True
-    # Section-header artifacts
-    if tl in {"abstract", "keywords"}:
+    if tl in {"abstract", "abstract:", "keywords", "keywords:"} or tl.startswith(("keywords:", "keywords ")):
         return True
-    if tl.startswith("keywords:") or tl.startswith("keywords "):
-        return True
-    # Author names, any
     for a in meta.authors or []:
-        if a.name and a.name.strip().lower() in tl and len(tl) < 200:
+        if a.name and a.name.strip().lower() in tl and len(t) < 200:
             return True
-    # Date lines
-    for kw in ("received", "revised", "accepted", "published"):
-        if tl.startswith(kw):
-            return True
-    # Affiliations
+    if _DATE_LINE.match(t):
+        return True
     for aff in meta.affiliations or []:
-        head = aff.strip().lower()[:25]
-        if head and head in tl and len(tl) < 200:
+        if aff and aff.strip().lower() in tl and len(t) < 200:
             return True
-    # Corresponding author marker
-    if "corresponding author" in tl or "corresponding:" in tl:
+    if "corresponding author" in tl and len(t) < 200:
         return True
     return False
-
-
-def _style(doc, name: str):
-    return doc.styles[name]
 
 
 # Source paragraph styles that already say "I am a caption": Word's built-in
@@ -186,10 +182,12 @@ def apply_styles(docx_path: str, meta) -> dict:
         for i, p in enumerate(paragraphs):
             if p.style and p.style.name == "TME Title":
                 last_title_idx = i
-        body_start = (last_title_idx or 0) + 1
+        # No TME Title: a plain document, classify everything from paragraph 0.
+        body_start = 0 if last_title_idx is None else last_title_idx + 1
 
     # Remove leading duplicates of cover content and any leftover placeholder
     deleted_preamble = 0
+    deleted_previews = []
     placeholder_token = "paste article body here"
     while body_start < len(paragraphs):
         p = paragraphs[body_start]
@@ -197,6 +195,8 @@ def apply_styles(docx_path: str, meta) -> dict:
         tl = t.lower()
         is_placeholder = placeholder_token in tl
         if not t or is_placeholder or _looks_like_cover_duplicate(t, meta):
+            if t and not is_placeholder:
+                deleted_previews.append(t[:80])
             p._element.getparent().remove(p._element)
             deleted_preamble += 1
             # Refresh paragraphs list since we mutated
@@ -207,6 +207,8 @@ def apply_styles(docx_path: str, meta) -> dict:
 
     stats = {
         "deleted_preamble": deleted_preamble,
+        "deleted_preamble_previews": deleted_previews,
+        "classifier_report": {},
         "skipped_empty": 0,
         "classifier": "heuristic",  # overwritten to 'gemini' if that path runs
         "applied": {},  # style name → count
@@ -231,6 +233,16 @@ def apply_styles(docx_path: str, meta) -> dict:
             p.paragraph_format.left_indent = None
             p.paragraph_format.first_line_indent = None
             continue
+        if src_style in ("Heading 1", "heading 1"):
+            _assign(p, doc, "TME H1", stats); continue
+        if src_style in ("Heading 2", "heading 2"):
+            _assign(p, doc, "TME H2", stats); continue
+        if src_style in ("Heading 3", "heading 3"):
+            _assign(p, doc, "TME H3", stats); continue
+        if src_style.startswith("TME ") and src_style != "TME Body":
+            # The editor set this in Word (or a previous Finalize did); final.
+            stats["applied"][src_style] = stats["applied"].get(src_style, 0) + 1
+            continue
         if is_caption_source_style(src_style):
             _assign(p, doc, caption_style_for(src_style, t), stats)
             continue
@@ -251,13 +263,11 @@ def apply_styles(docx_path: str, meta) -> dict:
     labels = None
     if pending_texts:
         try:
-            from classifier import classify_paragraphs
-            labels = classify_paragraphs(
-                pending_texts,
-                title=meta.title or "",
-                abstract=meta.abstract or "",
-            )
+            from classifier import classify_paragraphs_with_report
+            labels, report = classify_paragraphs_with_report(
+                pending_texts, title=meta.title or "", abstract=meta.abstract or "")
             stats["classifier"] = "gemini"
+            stats["classifier_report"] = report
         except Exception as e:
             stats["classifier"] = f"heuristic (gemini error: {e})"
             labels = None

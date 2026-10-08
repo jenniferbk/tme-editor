@@ -22,6 +22,18 @@ VALID_LABELS = {
     "skip",
 }
 
+from pydantic import BaseModel
+
+
+class _ClassificationItem(BaseModel):
+    i: int
+    label: str
+
+
+class _ClassificationResponse(BaseModel):
+    """Shape enforced by the SDK via response_schema."""
+    classifications: list[_ClassificationItem]
+
 
 _SYSTEM = """You are classifying paragraphs from a mathematics-education research article being prepared for publication in The Mathematics Educator (TME). Your job is to assign each paragraph a structural role so the layout engine can apply the right style.
 
@@ -44,16 +56,16 @@ You MUST return exactly one entry for every paragraph you were given, using the 
 """
 
 
-def classify_paragraphs(
+def classify_paragraphs_with_report(
     paragraph_texts: List[str],
     *,
     title: str = "",
     abstract: str = "",
     api_key: Optional[str] = None,
     model: str = "gemini-2.5-flash",
-) -> List[str]:
-    """Classify each paragraph. Returns a list of labels (same length/order as
-    input). Raises on API / parse error — caller should fall back to heuristic.
+) -> tuple[List[str], dict]:
+    """Classify each paragraph. Returns (labels, gap report); labels are the same length/order as
+    input. Raises on API / parse error — caller should fall back to heuristic.
     """
     import google.genai as genai
 
@@ -90,23 +102,43 @@ def classify_paragraphs(
         contents=prompt,
         config={
             "response_mime_type": "application/json",
+            "response_schema": _ClassificationResponse,
             "temperature": 0,
             # Disable "thinking" — classification is a pattern-match task,
             # not a reasoning task. Cuts latency by ~3-5×.
             "thinking_config": {"thinking_budget": 0},
         },
     )
-    data = json.loads(resp.text)
-    items = data.get("classifications", [])
-    # Build index → label map, defaulting to 'body' for any missing
-    by_idx = {}
+    return parse_classifications(resp.text, len(paragraph_texts))
+
+
+def classify_paragraphs(paragraph_texts, **kwargs) -> List[str]:
+    """Labels only; see classify_paragraphs_with_report for the gap report."""
+    return classify_paragraphs_with_report(paragraph_texts, **kwargs)[0]
+
+
+def parse_classifications(raw_json: str, n: int) -> tuple[List[str], dict]:
+    """Turn the model's JSON into one label per paragraph plus a report of
+    what had to be patched: `missing` indices default to body, `invalid`
+    items (bad index or unknown label) default to body, `duplicates` are
+    counted and the last one wins."""
+    data = json.loads(raw_json)
+    items = data.get("classifications", []) if isinstance(data, dict) else []
+    by_idx: dict[int, str] = {}
+    invalid = duplicates = 0
     for item in items:
         try:
-            i = int(item.get("i"))
-            label = str(item.get("label", "body"))
-        except (TypeError, ValueError):
+            i = int(item["i"])
+            label = str(item.get("label", ""))
+        except (TypeError, ValueError, KeyError):
+            invalid += 1
             continue
         if label not in VALID_LABELS:
+            invalid += 1
             label = "body"
+        if i in by_idx:
+            duplicates += 1
         by_idx[i] = label
-    return [by_idx.get(i + 1, "body") for i in range(len(paragraph_texts))]
+    labels = [by_idx.get(i, "body") for i in range(1, n + 1)]
+    missing = sum(1 for i in range(1, n + 1) if i not in by_idx)
+    return labels, {"missing": missing, "invalid": invalid, "duplicates": duplicates}
