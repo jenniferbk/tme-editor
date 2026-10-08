@@ -35,7 +35,7 @@ from apply_styles import apply_styles
 from extractor import ArticleMeta, extract_manuscript_text, extract_metadata
 from fixup import run_fixup, swap_captions_above
 from pipeline import run_pipeline
-from session_meta import read_meta
+from session_meta import choose_meta, read_meta
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 # AVIF needs a Pillow built with libavif; offer it only when this install has it.
@@ -251,7 +251,10 @@ if populated is not None:
         with st.spinner("Applying TME styles and running fixup battery…"):
             try:
                 proof_path = _save_upload(populated, "finalize", "proof.docx")
-                meta2 = st.session_state.meta or read_meta(proof_path)
+                meta2, meta_differs = choose_meta(read_meta(proof_path), st.session_state.meta)
+                if meta_differs:
+                    st.info("Using the metadata carried inside the uploaded starter; "
+                            "it differs from this session's Phase 1 values.")
                 if meta2 is None:
                     st.error(
                         "This document carries no TME metadata and none is in this session. "

@@ -1,10 +1,11 @@
 """ArticleMeta rides inside the starter so Phase 2 can recover it."""
+import pytest
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 from extractor import ArticleMeta, AuthorMeta
-from session_meta import DOCVAR_NAME, embed_meta, meta_from_json, meta_to_json, read_meta
+from session_meta import DOCVAR_NAME, choose_meta, embed_meta, meta_from_json, meta_to_json, read_meta
 
 
 def _meta():
@@ -64,3 +65,31 @@ def test_document_without_meta_reads_none(tmp_path):
     path = tmp_path / "plain.docx"
     Document().save(path)
     assert read_meta(path) is None
+
+
+def test_oversized_metadata_raises(tmp_path):
+    m = _meta()
+    m.abstract = "x" * 70_000
+    path = tmp_path / "big.docx"
+    Document().save(path)
+    with pytest.raises(ValueError, match="too large"):
+        embed_meta(path, m)
+
+
+def test_choose_meta_embedded_only():
+    chosen, differs = choose_meta(_meta(), None)
+    assert chosen == _meta() and differs is False
+
+
+def test_choose_meta_session_only():
+    chosen, differs = choose_meta(None, _meta())
+    assert chosen == _meta() and differs is False
+    assert choose_meta(None, None) == (None, False)
+
+
+def test_choose_meta_both_differing_prefers_embedded():
+    other = _meta()
+    other.title = "Article A"
+    chosen, differs = choose_meta(_meta(), other)
+    assert chosen.title == "T" and differs is True
+    assert choose_meta(_meta(), _meta()) == (_meta(), False)

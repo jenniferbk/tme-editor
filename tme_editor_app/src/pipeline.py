@@ -17,8 +17,8 @@ class PipelineResult:
 
 
 def run_pipeline(*, manuscript_src: Path, headshot_map: Dict[str, Path], meta, work_dir: Path) -> PipelineResult:
-    """Run the full pipeline. The starter carries `meta` in its document
-    properties so Phase 2 can recover it without the browser session."""
+    """Run the full pipeline. The starter carries `meta` in a Word document
+    variable so Phase 2 can recover it without the browser session."""
     work_dir.mkdir(parents=True, exist_ok=True)
 
     resolved_docx = work_dir / 'manuscript_resolved.docx'

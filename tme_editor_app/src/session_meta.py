@@ -15,6 +15,7 @@ from docx.oxml.ns import qn
 from extractor import ArticleMeta, AuthorMeta
 
 DOCVAR_NAME = "TME_META_JSON"
+DOCVAR_MAX_CHARS = 65_280   # Word's limit for one document-variable value
 
 # Elements that follow w:docVars in the CT_Settings schema sequence.
 _DOCVARS_SUCCESSORS = (
@@ -53,6 +54,9 @@ def _find_docvar(settings):
 def embed_meta(docx_path, meta: ArticleMeta) -> None:
     doc = Document(str(docx_path))
     settings = doc.settings.element
+    payload = meta_to_json(meta)
+    if len(payload) > DOCVAR_MAX_CHARS:
+        raise ValueError(f"metadata too large for a document variable ({len(payload)} chars)")
     docvars, var = _find_docvar(settings)
     if docvars is None:
         docvars = OxmlElement("w:docVars")
@@ -61,7 +65,7 @@ def embed_meta(docx_path, meta: ArticleMeta) -> None:
         var = OxmlElement("w:docVar")
         var.set(qn("w:name"), DOCVAR_NAME)
         docvars.append(var)
-    var.set(qn("w:val"), meta_to_json(meta))
+    var.set(qn("w:val"), payload)
     doc.save(str(docx_path))
 
 
@@ -74,3 +78,14 @@ def read_meta(docx_path):
         return meta_from_json(var.get(qn("w:val")) or "")
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         return None
+
+
+def choose_meta(embedded, session_meta):
+    """Pick the metadata for Finalize. The uploaded starter's own metadata wins
+    over whatever Phase 1 left in the session, so a second article uploaded in
+    the same session is not styled with the first article's values.
+    Returns (chosen, differs); differs is True when both exist and disagree."""
+    if embedded is None:
+        return session_meta, False
+    differs = session_meta is not None and meta_to_json(embedded) != meta_to_json(session_meta)
+    return embedded, differs
