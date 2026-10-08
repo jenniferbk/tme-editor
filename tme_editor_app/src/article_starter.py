@@ -103,9 +103,10 @@ def build_article_starter(*, meta, headshots: Dict[str, Path], out_path: Path) -
     cover_body_section.bottom_margin = Inches(0.3)
     cover_body_section.left_margin = Inches(0.5)
     cover_body_section.right_margin = Inches(0.5)
-    cover_body_section.footer.is_linked_to_previous = False
-    for p in list(cover_body_section.footer.paragraphs):
-        p._p.getparent().remove(p._p)
+    for footer in (cover_body_section.footer, cover_body_section.even_page_footer):
+        footer.is_linked_to_previous = False
+        for p in list(footer.paragraphs):
+            p._p.getparent().remove(p._p)
 
     author_entries = []
     for a in meta.authors:

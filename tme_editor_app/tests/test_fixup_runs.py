@@ -105,3 +105,58 @@ def test_cell_paragraph_direct_spacing_and_indent_stripped_but_alignment_kept():
     assert pPr.find(qn("w:spacing")) is None
     assert pPr.find(qn("w:ind")) is None
     assert pPr.find(qn("w:jc")).get(qn("w:val")) == "right"
+
+
+def _add_textbox_run(p, text="label"):
+    """A run holding a drawing whose text box contains its own paragraph and
+    run, formatted 9pt Arial bold, like a label in a Word-drawn figure."""
+    from lxml import etree
+    wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+    outer = OxmlElement("w:r")
+    drawing = OxmlElement("w:drawing")
+    txbx = etree.SubElement(drawing, "{%s}txbx" % wps)
+    content = etree.SubElement(txbx, qn("w:txbxContent"))
+    inner_p = etree.SubElement(content, qn("w:p"))
+    inner_r = etree.SubElement(inner_p, qn("w:r"))
+    rPr = etree.SubElement(inner_r, qn("w:rPr"))
+    fonts = etree.SubElement(rPr, qn("w:rFonts"))
+    fonts.set(qn("w:ascii"), "Arial")
+    etree.SubElement(rPr, qn("w:b"))
+    etree.SubElement(rPr, qn("w:sz")).set(qn("w:val"), "18")
+    t = etree.SubElement(inner_r, qn("w:t"))
+    t.text = text
+    outer.append(drawing)
+    p._p.append(outer)
+    return inner_r
+
+
+def test_text_box_labels_are_left_alone_but_direct_runs_are_stripped():
+    doc = _doc()
+    p = doc.add_paragraph(style="TME Body")
+    direct = p.add_run("body text")
+    direct.font.name = "Times New Roman"
+    inner = _add_textbox_run(p)
+
+    assert len(fixup._iter_runs(p)) == 2          # direct run + the run holding the drawing; the label is excluded
+
+    fixup.strip_direct_formatting(doc)
+
+    inner_rPr = inner.find(qn("w:rPr"))
+    for tag in ("w:rFonts", "w:b", "w:sz"):
+        assert inner_rPr.find(qn(tag)) is not None, tag
+    assert direct._r.find(qn("w:rPr")).find(qn("w:rFonts")) is None
+
+
+def test_trPr_flags_follow_schema_order_when_trHeight_exists():
+    doc = _doc()
+    t = doc.add_table(rows=2, cols=1)
+    for row in t.rows:
+        row.cells[0].text = "x"
+    tr = t.rows[0]._tr
+    trPr = tr.get_or_add_trPr()
+    trPr.append(OxmlElement("w:trHeight"))
+
+    fixup.fix_content_tables(doc, skip_indices=())
+
+    names = [c.tag.split("}")[1] for c in tr.find(qn("w:trPr"))]
+    assert names == ["cantSplit", "trHeight", "tblHeader"]

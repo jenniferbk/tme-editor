@@ -66,3 +66,20 @@ def test_masthead_grid_uses_layout_constants(tmp_path):
     fixup.fix_masthead_grid(doc)
     cols = [int(c.get(qn("w:w"))) for c in doc.tables[0]._tbl.tblGrid.findall(qn("w:gridCol"))]
     assert cols == [MASTHEAD_LEFT_WIDTH.twips, MASTHEAD_RIGHT_WIDTH.twips]
+
+
+def test_cover_count_ignores_a_pasted_table_that_is_the_first_body_element(tmp_path):
+    doc = Document(_starter(tmp_path))
+    placeholder = next(p for p in doc.paragraphs if p.text.startswith("[Paste"))
+    placeholder._p.getparent().remove(placeholder._p)
+    doc.add_table(rows=2, cols=2)                 # now the first body element
+    assert fixup.cover_table_count(doc) == 3
+
+
+def test_cover_body_even_page_footer_is_unlinked_and_has_no_how_to_cite(tmp_path):
+    doc = Document(_starter(tmp_path))
+    masthead_even = doc.sections[0].even_page_footer
+    assert "HOW TO CITE" in masthead_even._element.xml
+    body_even = doc.sections[1].even_page_footer
+    assert body_even.is_linked_to_previous is False
+    assert "HOW TO CITE" not in body_even._element.xml

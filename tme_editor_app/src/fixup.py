@@ -257,10 +257,12 @@ def cover_table_count(doc) -> int:
     start = find_body_start_index(paras)
     if start is None:
         return 0
-    start_el = paras[start]._p if start < len(paras) else None
+    if start == 0:
+        return 0
+    boundary = paras[start - 1]._p  # break paragraph carrying the cover sectPr
     n = 0
     for el in doc.element.body.iterchildren():
-        if el is start_el:
+        if el is boundary:
             break
         if el.tag == qn("w:tbl"):
             n += 1
@@ -376,11 +378,13 @@ def clear_list_direct_spacing(doc) -> int:
 
 
 def _iter_runs(p) -> list:
-    """Every run in the paragraph, including runs inside w:hyperlink and
-    w:ins. Paragraph.runs returns only direct w:r children, which is how a
-    hyperlinked DOI kept Times New Roman while the rest went Georgia."""
+    """Runs that belong to this paragraph: direct children plus runs inside
+    w:hyperlink and w:ins. Runs inside text boxes (w:txbxContent) belong to
+    their own paragraphs and are left alone: they are labels in Word-drawn
+    figures, not body text."""
     from docx.text.run import Run
-    return [Run(r, p) for r in p._p.iter(qn("w:r"))]
+    return [Run(r, p) for r in p._p.iter(qn("w:r"))
+            if next(r.iterancestors(qn("w:p")), None) is p._p]
 
 
 # Paragraph-property tags to strip from TME-styled paragraphs. These are the
@@ -635,15 +639,19 @@ def normalize_table_cells(doc, skip_indices=None) -> int:
 
 # ---------- table fixes ----------
 
+# CT_TrPr child order, used to keep inserted flags schema-valid.
+_TRPR_ORDER = ("cnfStyle", "divId", "gridBefore", "gridAfter", "wBefore",
+               "wAfter", "cantSplit", "trHeight", "tblHeader",
+               "tblCellSpacing", "jc", "hidden", "ins", "del", "trPrChange")
+
+
 def _set_trPr_flag(tr, tag_name: str) -> None:
-    trPr = tr.find(qn("w:trPr"))
-    if trPr is None:
-        trPr = OxmlElement("w:trPr")
-        tr.insert(0, trPr)
+    trPr = tr.get_or_add_trPr()
     existing = trPr.find(qn(f"w:{tag_name}"))
     if existing is None:
         el = OxmlElement(f"w:{tag_name}")
-        trPr.append(el)
+        successors = _TRPR_ORDER[_TRPR_ORDER.index(tag_name) + 1:]
+        trPr.insert_element_before(el, *(f"w:{t}" for t in successors))
 
 
 def fix_content_tables(doc, skip_indices=None) -> int:

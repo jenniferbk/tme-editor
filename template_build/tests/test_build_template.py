@@ -25,3 +25,11 @@ def test_build_has_six_sections_both_cover_footers_and_schema_order(tmp_path):
     assert doc.sections[5].header.is_linked_to_previous is False
     assert doc.sections[5].even_page_header.is_linked_to_previous is False
     assert document_violations(doc) == [], document_violations(doc)[:5]
+
+
+def test_cover_body_section_even_page_footer_is_unlinked_and_has_no_how_to_cite(tmp_path):
+    out = build_template.build(tmp_path / "template.docx")
+    doc = Document(str(out))
+    even = doc.sections[4].even_page_footer
+    assert even.is_linked_to_previous is False
+    assert "HOW TO CITE" not in even._element.xml
