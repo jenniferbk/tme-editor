@@ -1767,7 +1767,7 @@ LABELS = {
     "Figure 1": "skip",
     "UTG for the Cake Task": "caption_figure",
     "Students' Mathematics": "heading_2",
-    "Antonides, J., & Norton, A. (2023). Units. Journal, 1(1), 1–2. ": "reference",
+    "Antonides, J., & Norton, A. (2023). Units. Journal, 1(1), 1–2.": "reference",
     "(a) Sketch the graph.": "body",
 }
 
