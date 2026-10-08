@@ -90,6 +90,27 @@ def _style(doc, name: str):
     return doc.styles[name]
 
 
+# Source paragraph styles that already say "I am a caption": Word's built-in
+# "Caption", APA-template variants like "Figure Caption" / "Table Caption",
+# and label styles like "FigureLabel".
+_CAPTION_SRC_PAT = re.compile(r"caption|(figure|table)\s*label", re.I)
+
+
+def is_caption_source_style(src_style: str) -> bool:
+    return _CAPTION_SRC_PAT.search(src_style or "") is not None
+
+
+def caption_style_for(src_style: str, text: str) -> str:
+    """Figure vs table caption: the source style name decides when it names
+    one ("Table Caption"); otherwise the text's leading word; default figure."""
+    s = (src_style or "").lower()
+    if "table" in s:
+        return "TME Table Caption"
+    if "figure" in s:
+        return "TME Figure Caption"
+    return "TME Table Caption" if TAB_PAT.match(text) else "TME Figure Caption"
+
+
 def _assign(p, doc, style_name: str, stats: dict) -> None:
     p.style = doc.styles[style_name]
     stats["applied"][style_name] = stats["applied"].get(style_name, 0) + 1
@@ -198,11 +219,8 @@ def apply_styles(docx_path: str, meta) -> dict:
             p.paragraph_format.left_indent = None
             p.paragraph_format.first_line_indent = None
             continue
-        if src_style == "Caption" or src_style.startswith("Caption"):
-            if TAB_PAT.match(t):
-                _assign(p, doc, "TME Table Caption", stats)
-            else:
-                _assign(p, doc, "TME Figure Caption", stats)
+        if is_caption_source_style(src_style):
+            _assign(p, doc, caption_style_for(src_style, t), stats)
             continue
         if src_style == "EndNoteBibliographyTitle":
             _assign(p, doc, "TME H1", stats)

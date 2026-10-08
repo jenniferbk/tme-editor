@@ -6,6 +6,8 @@ makes necessary:
     quote, list spacing, heading keep-next)
   - block-quote remapping (indented body paragraphs → TME Block Quote)
   - caption reclassification (leading-word heuristic)
+  - split-caption merge (APA 7 "Figure 1" / title lines → "Figure 1. Title")
+  - image-paragraph centering
   - list direct-spacing clear
   - table centering + cantSplit + tblHeader
   - masthead grid rewrite (defensive, in case Word merged adjacent tables)
@@ -179,6 +181,113 @@ def fix_caption_classifications(doc) -> dict:
             p.style = tc
             stats["tab_fix"] += 1
     return stats
+
+
+# ---------- split (APA 7 two-line) captions ----------
+
+# A caption label standing alone on its line: "Figure 1", "Table 2.",
+# "Figure A1:", "Figure 3b". The number is optional because a SEQ field with
+# no cached result leaves just "Figure".
+_LABEL_ONLY_PAT = re.compile(r"^(Figure|Table)\s*(?:[A-Z]?\d+[a-z]?)?\s*[.:]?$", re.I)
+_LABEL_START_PAT = re.compile(r"^(Figure|Table)\s*[A-Z]?\d", re.I)
+_HEADING_STYLES = {"TME H1", "TME H2", "TME H3"}
+
+
+def _para_text_with_fields(p) -> str:
+    """Paragraph text including field results (SEQ caption numbers live inside
+    w:fldSimple, which Paragraph.text skips)."""
+    return "".join(t.text or "" for t in p._p.iter(qn("w:t")))
+
+
+def _has_image(p_el) -> bool:
+    return (p_el.find(".//" + qn("w:drawing")) is not None
+            or p_el.find(".//" + qn("w:pict")) is not None)
+
+
+def _body_paragraphs(doc) -> list:
+    """Paragraphs after the last paragraph-embedded section break: the article
+    body in our starter structure (the cover sections precede it). With no
+    embedded break (plain test documents) every paragraph counts."""
+    paras = list(doc.paragraphs)
+    last = None
+    for i, p in enumerate(paras):
+        pPr = p._p.find(qn("w:pPr"))
+        if pPr is not None and pPr.find(qn("w:sectPr")) is not None:
+            last = i
+    return paras if last is None else paras[last + 1:]
+
+
+def _fold_title_into_label(label_p, title_p) -> None:
+    """Append title_p's content to label_p as "<label>. <title>", keeping the
+    title's run formatting (inline italics etc.). Caller removes title_p."""
+    texts = [t for t in label_p._p.iter(qn("w:t")) if (t.text or "").strip()]
+    if texts:
+        texts[-1].text = texts[-1].text.rstrip().rstrip(".:")
+    label_p.add_run(". ")
+    for child in list(title_p._p):
+        if child.tag != qn("w:pPr"):
+            label_p._p.append(child)
+
+
+def merge_split_captions(doc) -> dict:
+    """APA 7 manuscripts put a caption's label ("Figure 1") and its title on
+    separate lines; TME uses one line ("Figure 1. Title").
+
+    Every label-only paragraph is restyled to the matching TME caption style
+    (whatever source style it pasted in with). When the next non-empty
+    paragraph is a short text line that is not itself a caption or heading,
+    it is folded into the label as the title and removed, along with any
+    empty spacer paragraphs between them."""
+    fc = doc.styles["TME Figure Caption"]
+    tc = doc.styles["TME Table Caption"]
+    stats = {"labels_restyled": 0, "titles_merged": 0}
+    paras = list(doc.paragraphs)
+    i = 0
+    while i < len(paras):
+        label_p = paras[i]
+        m = _LABEL_ONLY_PAT.match(_para_text_with_fields(label_p).strip())
+        if not m or _has_image(label_p._p):
+            i += 1
+            continue
+        label_p.style = fc if m.group(1).lower() == "figure" else tc
+        stats["labels_restyled"] += 1
+
+        j = i + 1
+        while (j < len(paras) and not _has_image(paras[j]._p)
+               and not _para_text_with_fields(paras[j]).strip()):
+            j += 1
+        if j < len(paras):
+            cand = paras[j]
+            ctext = _para_text_with_fields(cand).strip()
+            csn = cand.style.name if cand.style is not None else ""
+            looks_like_title = (
+                ctext and len(ctext) <= 400
+                and not _has_image(cand._p)
+                and not _LABEL_START_PAT.match(ctext)
+                and csn not in _HEADING_STYLES
+            )
+            if looks_like_title:
+                _fold_title_into_label(label_p, cand)
+                for k in range(i + 1, j + 1):
+                    paras[k]._p.getparent().remove(paras[k]._p)
+                stats["titles_merged"] += 1
+                paras = list(doc.paragraphs)
+        i += 1
+    return stats
+
+
+def center_image_paragraphs(doc) -> int:
+    """Center body paragraphs that hold only an image, so figures sit centered
+    under their captions regardless of the paragraph style they pasted in
+    with. Paragraphs with text (inline images) are left alone."""
+    n = 0
+    for p in _body_paragraphs(doc):
+        if not _has_image(p._p) or _para_text_with_fields(p).strip():
+            continue
+        if p.alignment != WD_ALIGN_PARAGRAPH.CENTER:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            n += 1
+    return n
 
 
 def clear_list_direct_spacing(doc) -> int:
@@ -636,6 +745,8 @@ def run_fixup(docx_path: str) -> dict:
     bq_count = remap_block_quotes(doc)
     rescued_refs = rescue_misclassified_references(doc)
     caption_stats = fix_caption_classifications(doc)
+    split_stats = merge_split_captions(doc)
+    images_centered = center_image_paragraphs(doc)
     list_n = clear_list_direct_spacing(doc)
     t_count = fix_content_tables(doc)
     masthead_ok = fix_masthead_grid(doc)
@@ -656,6 +767,8 @@ def run_fixup(docx_path: str) -> dict:
         "refs_rescued": rescued_refs,
         "captions": caption_stats,
         "captions_below_element": below,
+        "split_captions": split_stats,
+        "images_centered": images_centered,
         "lists_cleared": list_n,
         "tables_centered": t_count,
         "masthead_ok": masthead_ok,
