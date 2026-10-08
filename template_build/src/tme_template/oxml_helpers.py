@@ -134,13 +134,22 @@ def add_section_break_next_page(doc):
 
     Use this to start a new section on a fresh page so each section can
     have independent header/footer settings.
+
+    Note: python-docx reuses the body sentinel sectPr, so Section objects obtained
+    before this call now refer to the new section; finish configuring a section
+    before adding the next break.
     """
     from docx.enum.section import WD_SECTION
     return doc.add_section(WD_SECTION.NEW_PAGE)
 
 
 def add_continuous_section_break(doc):
-    """Add a continuous section break (no page break) and return the new section."""
+    """Add a continuous section break (no page break) and return the new section.
+
+    Note: python-docx reuses the body sentinel sectPr, so Section objects obtained
+    before this call now refer to the new section; finish configuring a section
+    before adding the next break.
+    """
     from docx.enum.section import WD_SECTION
     return doc.add_section(WD_SECTION.CONTINUOUS)
 

@@ -1,13 +1,13 @@
 """Front-matter page generators: issue cover, editorial staff, formal title page."""
-import io
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from docx.enum.table import WD_ROW_HEIGHT_RULE
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.shared import Inches, Pt, RGBColor
 
 from tme_template.colors import INK, META, UGA_RED
+from tme_template.images import open_image_as_rgb_stream
 from tme_template.oxml_helpers import apply_bottom_rule, remove_cell_borders, set_cell_shading
 from tme_template.runs import add_red_run
 
@@ -30,22 +30,6 @@ class StaffRoster:
     copy_editor: Optional[str]
     mesa_officers: Dict[str, str]
     mesa_term: str
-
-
-def _open_image_as_rgb_stream(path: str) -> io.BytesIO:
-    """Open an image file, convert to RGB if needed, return as in-memory JPEG stream.
-
-    python-docx cannot handle CMYK JPEGs directly. This function normalizes
-    the image to sRGB before inserting.
-    """
-    from PIL import Image
-    img = Image.open(path)
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=95)
-    buf.seek(0)
-    return buf
 
 
 def add_issue_cover_page(doc, issue: IssueInfo) -> None:
@@ -79,12 +63,7 @@ def add_issue_cover_page(doc, issue: IssueInfo) -> None:
 
     p_logo = _add_p()
     p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    try:
-        img_stream = _open_image_as_rgb_stream(issue.portrait_logo_path)
-        p_logo.add_run().add_picture(img_stream, height=Inches(4.0))
-    except (FileNotFoundError, OSError) as e:
-        import sys
-        print(f"Warning: could not load portrait logo: {e}", file=sys.stderr)
+    p_logo.add_run().add_picture(open_image_as_rgb_stream(issue.portrait_logo_path), height=Inches(4.0))
 
     p_vol = _add_p()
     p_vol.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -180,8 +159,12 @@ def add_editorial_staff_page(doc, roster: StaffRoster) -> None:
 
 def add_formal_title_page(doc, issue: IssueInfo) -> None:
     """Pure typography — wordmark + rules + issue info."""
+    # An exact 120pt line, not space-before: Word suppresses space-before at
+    # the top of a page after a hard break, and build_template now starts this
+    # page with one.
     p_spacer = doc.add_paragraph()
-    p_spacer.paragraph_format.space_before = Pt(120)
+    p_spacer.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+    p_spacer.paragraph_format.line_spacing = Pt(120)
 
     p_wm = doc.add_paragraph()
     p_wm.alignment = WD_ALIGN_PARAGRAPH.CENTER

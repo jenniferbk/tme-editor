@@ -7,6 +7,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
 from tme_template.colors import BLACK, UGA_RED
+from tme_template.images import open_image_as_rgb_stream
 from tme_template.layout import BLEED_IN, MASTHEAD_LEFT_WIDTH, MASTHEAD_RIGHT_WIDTH, PAGE_WIDTH_IN
 from tme_template.oxml_helpers import (
     force_table_full_width,
@@ -74,14 +75,9 @@ def add_masthead(doc, data: MastheadData) -> None:
 
     # Left cell: logo image, centered
     left.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    try:
-        p = left.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run()
-        run.add_picture(data.logo_path, width=Inches(3.0))
-    except FileNotFoundError:
-        import sys
-        print(f"Warning: logo not found at {data.logo_path}", file=sys.stderr)
+    p = left.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.add_run().add_picture(open_image_as_rgb_stream(data.logo_path), width=Inches(3.0))
 
     # Right cell: stacked metadata, right-aligned
     right.vertical_alignment = WD_ALIGN_VERTICAL.CENTER

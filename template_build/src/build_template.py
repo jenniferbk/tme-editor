@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.enum.text import WD_BREAK
 from docx.shared import Inches
 
 from tme_template.cover_footer import add_cover_footer
@@ -29,7 +30,12 @@ LOGO_P = str(REPO_ROOT / "assets" / "tme-logo-portrait.jpg")
 OUTPUT = REPO_ROOT / "TME_Template_2026.docx"
 
 
-def build() -> Path:
+def build(out_path: Path = OUTPUT) -> Path:
+    # python-docx caveat: doc.add_section() reuses the body's sentinel sectPr
+    # for the NEW section and clones it to close the old one, so a Section
+    # object fetched earlier silently points at the newest section afterwards.
+    # Every mutation of a section below happens before the next break is
+    # added; keep it that way, or re-fetch via doc.sections[i].
     doc = Document()
     configure_page_setup(doc)
     register_body_style(doc)
@@ -45,7 +51,10 @@ def build() -> Path:
 
     # --- Page 1: issue cover ---
     add_issue_cover_page(doc, issue)
-    # No explicit page break: the full-page table fills the page on its own.
+    # Explicit page break: the cover table is 9" at-least and the title page
+    # opened with a 120pt spacer, so the pages used to separate only by
+    # overflow arithmetic.
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     # --- Page 2: formal title ---
     add_formal_title_page(doc, issue)
@@ -53,8 +62,6 @@ def build() -> Path:
     # --- Page 3: editorial staff (masthead = zero-margin section, roster = normal) ---
     ed_masthead_section = add_section_break_next_page(doc)
     configure_zero_margins(ed_masthead_section)
-    ed_masthead_section.page_width = Inches(8.5)
-    ed_masthead_section.page_height = Inches(11)
     add_masthead(doc, MastheadData(
         article_type="EDITORIAL STAFF",
         volume=34, number=1, year=2026, pages=None,
@@ -65,8 +72,6 @@ def build() -> Path:
     ))
     add_tagline_strip(doc)
     ed_body_section = add_continuous_section_break(doc)
-    ed_body_section.page_width = Inches(8.5)
-    ed_body_section.page_height = Inches(11)
     ed_body_section.top_margin = Inches(0.3)
     ed_body_section.bottom_margin = Inches(0.5)
     ed_body_section.left_margin = Inches(0.5)
@@ -95,8 +100,6 @@ def build() -> Path:
     masthead_section = add_section_break_next_page(doc)
     configure_zero_margins(masthead_section)
     masthead_section.bottom_margin = Inches(0.5)   # give the footer room to render
-    masthead_section.page_width = Inches(8.5)
-    masthead_section.page_height = Inches(11)
     add_masthead(doc, MastheadData(
         article_type="RESEARCH ARTICLE",
         volume=34, number=1, year=2026, pages="1–24",
@@ -109,8 +112,6 @@ def build() -> Path:
         citation="[Author, A. (YYYY). Title. The Mathematics Educator, V(N), pp–pp.]",
     )
     cover_body_section = add_continuous_section_break(doc)
-    cover_body_section.page_width = Inches(8.5)
-    cover_body_section.page_height = Inches(11)
     cover_body_section.top_margin = Inches(0.3)
     cover_body_section.bottom_margin = Inches(0.3)
     cover_body_section.left_margin = Inches(0.5)
@@ -150,8 +151,8 @@ def build() -> Path:
     doc.add_paragraph("[First body paragraph of the article.]", style="TME Body")
     doc.add_paragraph("[Second paragraph.]", style="TME Body")
 
-    doc.save(str(OUTPUT))
-    return OUTPUT
+    doc.save(str(out_path))
+    return out_path
 
 
 if __name__ == "__main__":
