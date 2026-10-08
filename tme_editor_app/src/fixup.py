@@ -32,7 +32,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 from docx.text.paragraph import Paragraph
 
-from apply_styles import find_body_start_index
+from apply_styles import FIG_PAT, TAB_PAT, find_body_start_index
 from tme_template.colors import BLOCKQUOTE_INK
 
 
@@ -165,8 +165,8 @@ def fix_caption_classifications(doc) -> dict:
         t = p.text.strip()
         if not t or len(t) > 400:
             continue
-        starts_fig = t.startswith("Figure")
-        starts_tab = t.startswith("Table")
+        starts_fig = FIG_PAT.match(t) is not None
+        starts_tab = TAB_PAT.match(t) is not None
         if not (starts_fig or starts_tab):
             continue
         sn = p.style.name

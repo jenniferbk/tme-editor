@@ -15,8 +15,11 @@ from docx import Document
 from docx.oxml.ns import qn
 
 
-FIG_PAT = re.compile(r"^\s*Figure\s", re.I)
-TAB_PAT = re.compile(r"^\s*Table\s", re.I)
+# A caption label at the start of a paragraph: "Figure 1." / "Table 2:" /
+# "Figure A1.". The period or colon after the number is what separates a
+# caption from a body sentence like "Figure 1 depicts..." or "Tables were...".
+FIG_PAT = re.compile(r"^\s*Figure\s+[A-Z]?\d+[a-z]?\s*[.:]", re.I)
+TAB_PAT = re.compile(r"^\s*Table\s+[A-Z]?\d+[a-z]?\s*[.:]", re.I)
 # Matches "LastName, F." or "LastName, F. M." or "LastName, F., &" — reference entry openers
 REF_PAT = re.compile(
     r"^[A-ZÀ-ÖØ-Ý][\w'’\-]+,\s+[A-Z]\."
