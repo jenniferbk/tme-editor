@@ -1,18 +1,66 @@
-"""Low-level OOXML helpers for operations python-docx doesn't cover."""
+"""Low-level OOXML helpers for operations python-docx doesn't cover.
+
+Every insert goes through BaseOxmlElement.insert_element_before with the
+element's schema successors, so Word, LibreOffice and validators all read the
+same thing. The successor tuples are slices of python-docx's own tag
+sequences (docx/oxml/text/parfmt.py and docx/oxml/table.py).
+"""
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+# Successors of w:pBdr inside w:pPr.
+_PPR_AFTER_PBDR = (
+    "w:shd", "w:tabs", "w:suppressAutoHyphens", "w:kinsoku", "w:wordWrap",
+    "w:overflowPunct", "w:topLinePunct", "w:autoSpaceDE", "w:autoSpaceDN",
+    "w:bidi", "w:adjustRightInd", "w:snapToGrid", "w:spacing", "w:ind",
+    "w:contextualSpacing", "w:mirrorIndents", "w:suppressOverlap", "w:jc",
+    "w:textDirection", "w:textAlignment", "w:textboxTightWrap", "w:outlineLvl",
+    "w:divId", "w:cnfStyle", "w:rPr", "w:sectPr", "w:pPrChange",
+)
+# Order of sides inside w:pBdr.
+_BORDER_SEQ = ("w:top", "w:left", "w:bottom", "w:right", "w:between", "w:bar")
+# Full w:tcPr and w:tblPr sequences; successors are computed by slicing.
+_TCPR_SEQ = (
+    "w:cnfStyle", "w:tcW", "w:gridSpan", "w:hMerge", "w:vMerge", "w:tcBorders",
+    "w:shd", "w:noWrap", "w:tcMar", "w:textDirection", "w:tcFitText", "w:vAlign",
+    "w:hideMark", "w:headers", "w:cellIns", "w:cellDel", "w:cellMerge",
+    "w:tcPrChange",
+)
+_TBLPR_SEQ = (
+    "w:tblStyle", "w:tblpPr", "w:tblOverlap", "w:bidiVisual",
+    "w:tblStyleRowBandSize", "w:tblStyleColBandSize", "w:tblW", "w:jc",
+    "w:tblCellSpacing", "w:tblInd", "w:tblBorders", "w:shd", "w:tblLayout",
+    "w:tblCellMar", "w:tblLook", "w:tblCaption", "w:tblDescription",
+    "w:tblPrChange",
+)
+
+
+def _after(seq, tag):
+    return seq[seq.index(tag) + 1:]
+
+
+def _get_or_insert(parent, tag, seq):
+    """Return parent/<tag>, creating it in schema position if absent."""
+    el = parent.find(qn(tag))
+    if el is None:
+        el = OxmlElement(tag)
+        parent.insert_element_before(el, *_after(seq, tag))
+    return el
+
+
+def _replace(parent, tag, seq):
+    """Remove any existing parent/<tag> and insert a fresh one in schema position."""
+    existing = parent.find(qn(tag))
+    if existing is not None:
+        parent.remove(existing)
+    el = OxmlElement(tag)
+    parent.insert_element_before(el, *_after(seq, tag))
+    return el
+
 
 def set_cell_shading(cell, fill_hex: str) -> None:
-    """Set a table cell's fill color.
-
-    fill_hex is a 6-char hex string without leading #.
-    """
-    tcPr = cell._tc.get_or_add_tcPr()
-    shd = tcPr.find(qn("w:shd"))
-    if shd is None:
-        shd = OxmlElement("w:shd")
-        tcPr.append(shd)
+    """Set a table cell's fill color. fill_hex is 6 hex chars, no leading #."""
+    shd = _get_or_insert(cell._tc.get_or_add_tcPr(), "w:shd", _TCPR_SEQ)
     shd.set(qn("w:val"), "clear")
     shd.set(qn("w:color"), "auto")
     shd.set(qn("w:fill"), fill_hex)
@@ -20,19 +68,25 @@ def set_cell_shading(cell, fill_hex: str) -> None:
 
 def remove_cell_borders(cell) -> None:
     """Remove all four borders from a table cell."""
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcBorders = tcPr.find(qn("w:tcBorders"))
-    if tcBorders is None:
-        tcBorders = OxmlElement("w:tcBorders")
-        tcPr.append(tcBorders)
+    tcBorders = _get_or_insert(cell._tc.get_or_add_tcPr(), "w:tcBorders", _TCPR_SEQ)
     for side in ("top", "left", "bottom", "right"):
         side_el = tcBorders.find(qn(f"w:{side}"))
         if side_el is None:
             side_el = OxmlElement(f"w:{side}")
-            tcBorders.append(side_el)
+            tcBorders.append(side_el)   # top, left, bottom, right is schema order
         side_el.set(qn("w:val"), "nil")
         side_el.set(qn("w:sz"), "0")
         side_el.set(qn("w:color"), "auto")
+
+
+def set_cell_margins(cell, *, top=0, bottom=0, left=80, right=80):
+    """Set cell internal margins (twentieths of a point — Word's tcMar units)."""
+    tcMar = _replace(cell._tc.get_or_add_tcPr(), "w:tcMar", _TCPR_SEQ)
+    for side, val in (("top", top), ("left", left), ("bottom", bottom), ("right", right)):
+        el = OxmlElement(f"w:{side}")
+        el.set(qn("w:w"), str(val))
+        el.set(qn("w:type"), "dxa")
+        tcMar.append(el)
 
 
 def _ensure_pBdr(paragraph):
@@ -40,7 +94,7 @@ def _ensure_pBdr(paragraph):
     pBdr = pPr.find(qn("w:pBdr"))
     if pBdr is None:
         pBdr = OxmlElement("w:pBdr")
-        pPr.append(pBdr)
+        pPr.insert_element_before(pBdr, *_PPR_AFTER_PBDR)
     return pBdr
 
 
@@ -49,53 +103,30 @@ def _set_border(pBdr, side: str, hex_color: str, size_eighths_pt: int):
     el = pBdr.find(qn(f"w:{side}"))
     if el is None:
         el = OxmlElement(f"w:{side}")
-        pBdr.append(el)
+        # w:pBdr has no python-docx element class, so it lacks
+        # insert_element_before; place the side before its first successor.
+        successor = next(
+            (c for t in _after(_BORDER_SEQ, f"w:{side}") for c in pBdr.findall(qn(t))),
+            None,
+        )
+        if successor is None:
+            pBdr.append(el)
+        else:
+            successor.addprevious(el)
     el.set(qn("w:val"), "single")
     el.set(qn("w:sz"), str(size_eighths_pt))
     el.set(qn("w:space"), "4")
     el.set(qn("w:color"), hex_color)
 
 
-def apply_red_left_rule(paragraph, hex_color: str, width_pt: int = 3) -> None:
-    """Apply a colored left border to a paragraph (e.g., the H1 red rule)."""
-    pBdr = _ensure_pBdr(paragraph)
-    # sz unit is eighths of a point; 3pt = 24 eighths
-    _set_border(pBdr, "left", hex_color, width_pt * 8)
-
-
 def apply_bottom_rule(paragraph, hex_color: str, width_pt: int = 1) -> None:
-    """Apply a colored bottom border to a paragraph (horizontal rule effect)."""
-    pBdr = _ensure_pBdr(paragraph)
-    _set_border(pBdr, "bottom", hex_color, width_pt * 8)
+    """Colored bottom border on a paragraph (horizontal rule effect)."""
+    _set_border(_ensure_pBdr(paragraph), "bottom", hex_color, width_pt * 8)
 
 
 def apply_top_rule(paragraph, hex_color: str, width_pt: int = 1) -> None:
-    """Apply a colored top border to a paragraph (e.g., footer separator)."""
-    pBdr = _ensure_pBdr(paragraph)
-    _set_border(pBdr, "top", hex_color, width_pt * 8)
-
-
-def apply_pullquote_rules(paragraph, top_hex: str, bottom_hex: str) -> None:
-    """Apply top (thicker) and bottom (thinner) red rules for pullquotes."""
-    pBdr = _ensure_pBdr(paragraph)
-    _set_border(pBdr, "top", top_hex, 16)     # 2pt = 16 eighths
-    _set_border(pBdr, "bottom", bottom_hex, 8) # 1pt = 8 eighths
-
-
-def set_cell_margins(cell, *, top=0, bottom=0, left=80, right=80):
-    """Set cell internal margins (in twentieths of a point — Word's tcMar units)."""
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcMar = OxmlElement("w:tcMar")
-    for side, val in (("top", top), ("bottom", bottom), ("left", left), ("right", right)):
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:w"), str(val))
-        el.set(qn("w:type"), "dxa")
-        tcMar.append(el)
-    # Remove existing tcMar if any
-    existing = tcPr.find(qn("w:tcMar"))
-    if existing is not None:
-        tcPr.remove(existing)
-    tcPr.append(tcMar)
+    """Colored top border on a paragraph (e.g., footer separator)."""
+    _set_border(_ensure_pBdr(paragraph), "top", hex_color, width_pt * 8)
 
 
 def add_section_break_next_page(doc):
@@ -116,87 +147,23 @@ def add_continuous_section_break(doc):
 
 def force_table_full_width(table, total_width_inches: float = 8.5,
                            left_indent_inches: float = 0.0):
-    """Force a table to render at exactly the given width with a specified left
-    indent and no auto-resize. Required when default Word behavior shrinks tables
-    inside zero-margin sections."""
-    # Twentieths of a point: 1 inch = 1440 twips
-    total_twips = int(total_width_inches * 1440)
-    indent_twips = int(left_indent_inches * 1440)
-    tbl = table._tbl
-    tblPr = tbl.tblPr if tbl.tblPr is not None else None
-    if tblPr is None:
-        tblPr = OxmlElement("w:tblPr")
-        tbl.insert(0, tblPr)
+    """Render a table at exactly the given width with a given left indent and
+    zero default cell margins. Needed because python-docx sizes a new table to
+    the body width, and treats a zero margin as unset (1") when computing it,
+    so tables in zero-margin sections come out 6.5" wide.
 
-    # Set or replace tblW
-    existing_tblW = tblPr.find(qn("w:tblW"))
-    if existing_tblW is not None:
-        tblPr.remove(existing_tblW)
-    tblW = OxmlElement("w:tblW")
-    tblW.set(qn("w:w"), str(total_twips))
+    Callers set `table.autofit = False` themselves; that writes w:tblLayout
+    type=fixed natively, so column widths are honored."""
+    tblPr = table._tbl.tblPr
+    tblW = _replace(tblPr, "w:tblW", _TBLPR_SEQ)
+    tblW.set(qn("w:w"), str(int(total_width_inches * 1440)))
     tblW.set(qn("w:type"), "dxa")
-    tblPr.append(tblW)
-
-    # Set tblInd
-    existing_tblInd = tblPr.find(qn("w:tblInd"))
-    if existing_tblInd is not None:
-        tblPr.remove(existing_tblInd)
-    tblInd = OxmlElement("w:tblInd")
-    tblInd.set(qn("w:w"), str(indent_twips))
+    tblInd = _replace(tblPr, "w:tblInd", _TBLPR_SEQ)
+    tblInd.set(qn("w:w"), str(int(left_indent_inches * 1440)))
     tblInd.set(qn("w:type"), "dxa")
-    tblPr.append(tblInd)
-
-    # Set tblLayout to fixed so column widths are honored
-    existing_layout = tblPr.find(qn("w:tblLayout"))
-    if existing_layout is not None:
-        tblPr.remove(existing_layout)
-    tblLayout = OxmlElement("w:tblLayout")
-    tblLayout.set(qn("w:type"), "fixed")
-    tblPr.append(tblLayout)
-
-    # Zero out default cell margins for the table
-    existing_tblCellMar = tblPr.find(qn("w:tblCellMar"))
-    if existing_tblCellMar is not None:
-        tblPr.remove(existing_tblCellMar)
-    tblCellMar = OxmlElement("w:tblCellMar")
+    tblCellMar = _replace(tblPr, "w:tblCellMar", _TBLPR_SEQ)
     for side in ("top", "left", "bottom", "right"):
         m = OxmlElement(f"w:{side}")
         m.set(qn("w:w"), "0")
         m.set(qn("w:type"), "dxa")
         tblCellMar.append(m)
-    tblPr.append(tblCellMar)
-
-
-def set_explicit_tbl_grid(table, col_widths_twips):
-    """Replace the tblGrid with exactly these columns (widths in twips).
-
-    When two adjacent tables with no paragraph between them are saved by Word,
-    Word can merge them into one table with a unioned grid that contains tiny
-    phantom columns at the edges. Rewriting tblGrid and removing gridBefore/
-    gridAfter/wBefore/wAfter from every row eliminates those phantoms.
-    """
-    tbl = table._tbl
-    # Replace tblGrid
-    existing_grid = tbl.find(qn("w:tblGrid"))
-    if existing_grid is not None:
-        tbl.remove(existing_grid)
-    tblGrid = OxmlElement("w:tblGrid")
-    for w in col_widths_twips:
-        col = OxmlElement("w:gridCol")
-        col.set(qn("w:w"), str(int(w)))
-        tblGrid.append(col)
-    # Insert tblGrid immediately after tblPr
-    tblPr = tbl.find(qn("w:tblPr"))
-    if tblPr is not None:
-        tblPr.addnext(tblGrid)
-    else:
-        tbl.insert(0, tblGrid)
-
-    # Strip gridBefore/gridAfter/wBefore/wAfter from every row
-    for tr in tbl.findall(qn("w:tr")):
-        trPr = tr.find(qn("w:trPr"))
-        if trPr is None:
-            continue
-        for tag in ("w:gridBefore", "w:gridAfter", "w:wBefore", "w:wAfter"):
-            for el in trPr.findall(qn(tag)):
-                trPr.remove(el)
